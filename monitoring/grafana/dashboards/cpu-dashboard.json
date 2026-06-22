@@ -1,0 +1,22 @@
+{
+  "title": "CPU Overview",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "CPU Usage (avg)",
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "CPU Cores",
+      "targets": [{"expr": "count(count(node_cpu_seconds_total) by (cpu)) by (instance)"}]
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 1
+}

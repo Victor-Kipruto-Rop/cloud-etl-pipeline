@@ -1,0 +1,22 @@
+{
+  "title": "Memory Overview",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Memory Used %",
+      "targets": [
+        {
+          "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+          "legendFormat": "{{instance}}"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Memory Total (GB)",
+      "targets": [{"expr": "node_memory_MemTotal_bytes / 1024 / 1024 / 1024"}]
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 1
+}
