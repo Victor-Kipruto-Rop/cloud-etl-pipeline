@@ -15,4 +15,4 @@ scrape_configs:
     # When running via docker-compose, replace 'host.docker.internal' with the
     # host address reachable from containers, or use a sidecar exporter.
     static_configs:
-      - targets: ['host.docker.internal:8000', 'localhost:8000']
+      - targets: ['host.docker.internal:8000', 'localhost:8000', '172.17.0.1:8000']

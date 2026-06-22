@@ -25,9 +25,24 @@
       "targets": [{"expr": "etl_files_failed_total"}]
     },
     {
+      "type": "stat",
+      "title": "Current Files In Progress",
+      "targets": [{"expr": "etl_current_in_progress"}]
+    },
+    {
       "type": "graph",
       "title": "Rows Loaded /s",
       "targets": [{"expr": "rate(etl_rows_loaded_total[1m])"}]
+    },
+    {
+      "type": "graph",
+      "title": "Rows Extracted /s",
+      "targets": [{"expr": "rate(etl_rows_extracted_total[1m])"}]
+    },
+    {
+      "type": "graph",
+      "title": "Failure Rate /m",
+      "targets": [{"expr": "rate(etl_files_failed_total[5m])"}]
     }
   ],
   "schemaVersion": 16,

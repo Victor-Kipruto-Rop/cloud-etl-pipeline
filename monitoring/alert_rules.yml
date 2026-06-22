@@ -10,6 +10,15 @@ groups:
           summary: "ETL failing at high rate"
           description: "More than 0 failures per 5m ({{ $value }})"
 
+      - alert: ETLNoMetrics
+        expr: up{job="etl"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ETL metrics exporter is not reachable"
+          description: "Prometheus cannot scrape the ETL exporter on job 'etl' for more than 2 minutes. Check the pipeline metrics port and target configuration."
+
       - alert: ETLLongRunningJob
         expr: increase(etl_files_processed_total[1h]) == 0
         for: 2h

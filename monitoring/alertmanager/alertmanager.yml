@@ -9,14 +9,15 @@ route:
 
 receivers:
   - name: 'default'
-    # Update or add receivers below (slack, email)
+    # Update or add receivers below (slack, email). Use environment variables
+    # to inject secrets instead of committing them directly.
     slack_configs:
-      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
-        channel: '#alerts'
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '${SLACK_CHANNEL:-#alerts}'
     email_configs:
-      - to: 'oncall@example.com'
-        from: 'alertmanager@example.com'
-        smarthost: 'smtp.example.com:587'
-        auth_username: 'alert@example.com'
-        auth_identity: 'alert@example.com'
-        auth_password: 'REPLACE_WITH_SECRET'
+      - to: '${ALERT_EMAIL_TO:-oncall@example.com}'
+        from: '${ALERT_EMAIL_FROM:-alertmanager@example.com}'
+        smarthost: '${SMTP_HOST:-smtp.example.com}:587'
+        auth_username: '${SMTP_USERNAME:-alert@example.com}'
+        auth_identity: '${SMTP_IDENTITY:-alert@example.com}'
+        auth_password: '${SMTP_PASSWORD:-REPLACE_WITH_SECRET}'

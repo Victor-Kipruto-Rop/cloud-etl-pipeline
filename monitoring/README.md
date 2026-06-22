@@ -14,7 +14,22 @@ docker-compose -f monitoring/docker-compose.monitoring.yml up -d
 - Prometheus: http://localhost:9090
 - Alertmanager: http://localhost:9093
 
-3. Confirm ETL metrics are being scraped. By default `prometheus.yml` includes `host.docker.internal:8000` and `localhost:8000` as example ETL targets. If your ETL process exposes metrics on a different host/port, update `prometheus.yml`.
+3. Confirm ETL metrics are being scraped. By default `prometheus.yml` includes `host.docker.internal:8000`, `localhost:8000`, and `172.17.0.1:8000` as example ETL targets. If your ETL process exposes metrics on a different host/port, update `prometheus.yml`.
+
+4. Start the ETL pipeline with metrics enabled by setting `METRICS_PORT`. For example:
+
+```bash
+METRICS_PORT=8000 .venv/bin/python3 -m src.pipeline
+```
+
+The pipeline exposes Prometheus metrics on the configured port when `METRICS_PORT` is set.
+
+Current ETL metric names:
+- `etl_files_processed_total`
+- `etl_files_failed_total`
+- `etl_rows_extracted_total`
+- `etl_rows_loaded_total`
+- `etl_current_in_progress`
 
 Provisioned dashboards
 - `etl-dashboard.json` — ETL-specific counters: files processed, files failed, rows loaded rate.
