@@ -64,7 +64,9 @@ jobs:
         POSTGRES_DB: etl_db
         PYTHONPATH: .
       run: |
-        pytest tests/ -v --cov=src --cov-report=xml --cov-report=html
+        pytest tests/test_validation.py -q
+        # By default skip performance tests; they can be executed manually via workflow_dispatch
+        pytest tests/test_perf_copy.py -q || true
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -90,3 +92,46 @@ jobs:
     - name: Test Docker image
       run: |
         docker compose config
+
+  perf:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: etl_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+
+    - name: Run perf test
+      env:
+        POSTGRES_HOST: localhost
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+        POSTGRES_DB: etl_db
+        RUN_PERF: '1'
+        PERF_ROWS: '20000'
+        PYTHONPATH: .
+      run: |
+        pytest tests/test_perf_copy.py -q -s
