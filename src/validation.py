@@ -32,9 +32,10 @@ def validate_df(
     Raises ValidationError on failure.
     """
     if _HAS_PANDERA and required_columns:
-        # Use a minimal pandera schema requiring presence of columns
+        # Use a minimal pandera schema requiring presence of columns, without
+        # enforcing a strict dtype for production-friendly checks.
         schema = DataFrameSchema(
-            {c: Column(object, nullable=True) for c in required_columns}
+            {c: Column(None, nullable=True) for c in required_columns}
         )
         try:
             schema.validate(df, lazy=False)

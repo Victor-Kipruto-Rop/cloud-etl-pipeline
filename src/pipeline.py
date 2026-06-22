@@ -10,8 +10,10 @@ from threading import Lock
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
+from src.config import get_config
 from src.dashboard import generate_dashboard
 from src.extract.extract_data import ExtractionError, extract_csv
+from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
 from src.load.staging_loader import upsert_from_staging
@@ -45,6 +47,22 @@ logger = logging.getLogger(__name__)
 
 RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
+
+
+def configure_logging(log_dir: Path) -> None:
+    """Configure pipeline logging to the desired directory."""
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "pipeline.log"
+
+    root = logging.getLogger()
+    for handler in root.handlers[:]:
+        root.removeHandler(handler)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s:%(name)s:%(message)s",
+        handlers=[logging.FileHandler(log_file), logging.StreamHandler(sys.stdout)],
+    )
 
 
 class PipelineStats:
@@ -87,7 +105,12 @@ class PipelineStats:
         logger.info("=" * 80)
 
 
-def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> bool:
+def process_file(
+    csv_file: Path,
+    stats: PipelineStats,
+    engine=None,
+    max_retries: int = 3,
+) -> bool:
     """
     Process a single CSV file through the ETL pipeline with retry logic.
 
@@ -204,6 +227,13 @@ def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> 
 
 def run():
     """Execute the ETL pipeline."""
+    config = get_config()
+    configure_logging(config.pipeline.log_dir)
+
+    global RAW_DIR, PROCESSED_DIR
+    RAW_DIR = config.pipeline.raw_data_dir
+    PROCESSED_DIR = config.pipeline.processed_data_dir
+
     start_time = datetime.now()
     logger.info("\n" + "=" * 80)
     logger.info(f"ETL PIPELINE STARTED: {start_time.isoformat()}")
@@ -236,6 +266,21 @@ def run():
         except Exception as e:
             logger.warning(f"Failed to create DB engine: {e}")
 
+    # Download Kaggle dataset if configured
+    if config.pipeline.kaggle_download:
+        try:
+            download_kaggle_dataset(
+                config.pipeline.kaggle_dataset or "",
+                destination=RAW_DIR,
+                unzip=True,
+                force=config.pipeline.kaggle_force,
+                quiet=config.pipeline.kaggle_quiet,
+                file_pattern=config.pipeline.kaggle_file_pattern,
+            )
+        except KaggleDownloadError as e:
+            logger.error(f"Kaggle dataset download failed: {e}")
+            return False
+
     # Validate directories
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     if not RAW_DIR.exists():
@@ -262,7 +307,16 @@ def run():
 
         if parallel_workers > 1:
             with ThreadPoolExecutor(max_workers=parallel_workers) as exc:
-                futures = {exc.submit(process_file, f, stats): f for f in batch}
+                futures = {
+                    exc.submit(
+                        process_file,
+                        f,
+                        stats,
+                        engine,
+                        max_retries=config.pipeline.max_retries,
+                    ): f
+                    for f in batch
+                }
                 for fut in as_completed(futures):
                     f = futures[fut]
                     try:
@@ -271,7 +325,7 @@ def run():
                         logger.error(f"Error processing {f}: {e}")
         else:
             for csv_file in batch:
-                process_file(csv_file, stats)
+                process_file(csv_file, stats, engine, max_retries=config.pipeline.max_retries)
 
     # Log final statistics
     stats.log_stats()

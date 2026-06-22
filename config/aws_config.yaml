@@ -1,0 +1,150 @@
+# AWS Resource Configuration
+aws:
+  region: "us-east-1"
+  account_id: "${AWS_ACCOUNT_ID}"
+  
+s3:
+  buckets:
+    data:
+      name: "cloud-etl-pipeline-data-${AWS_ACCOUNT_ID}"
+      versioning: true
+      encryption: "AES256"
+      lifecycle_rules:
+        - id: "archive-old-raw"
+          prefix: "raw/"
+          transitions:
+            - days: 90
+              storage_class: "STANDARD_IA"
+            - days: 180
+              storage_class: "GLACIER"
+        - id: "expire-logs"
+          prefix: "logs/"
+          expiration_days: 365
+    scripts:
+      name: "cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}"
+      versioning: true
+    logs:
+      name: "cloud-etl-pipeline-logs-${AWS_ACCOUNT_ID}"
+      expiration_days: 90
+
+glue:
+  database_name: "etl_catalog"
+  jobs:
+    ecommerce:
+      name: "ecommerce-transform-job"
+      script_location: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/glue/ecommerce_transform.py"
+      max_concurrent_runs: 2
+      max_retries: 2
+      timeout_minutes: 60
+      worker_type: "G.1X"
+      number_of_workers: 5
+    healthcare:
+      name: "healthcare-transform-job"
+      script_location: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/glue/healthcare_transform.py"
+      max_concurrent_runs: 2
+      max_retries: 2
+      timeout_minutes: 30
+      worker_type: "G.1X"
+      number_of_workers: 3
+    finance:
+      name: "finance-transform-job"
+      script_location: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/glue/finance_transform.py"
+      max_concurrent_runs: 2
+      max_retries: 2
+      timeout_minutes: 90
+      worker_type: "G.1X"
+      number_of_workers: 10
+    sports:
+      name: "sports-transform-job"
+      script_location: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/glue/sports_transform.py"
+      max_concurrent_runs: 2
+      max_retries: 2
+      timeout_minutes: 45
+      worker_type: "G.1X"
+      number_of_workers: 5
+    climate:
+      name: "climate-transform-job"
+      script_location: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/glue/climate_transform.py"
+      max_concurrent_runs: 2
+      max_retries: 2
+      timeout_minutes: 60
+      worker_type: "G.1X"
+      number_of_workers: 7
+
+redshift:
+  cluster_identifier: "etl-analytics-cluster"
+  node_type: "dc2.large"
+  number_of_nodes: 2
+  database_name: "analytics_dw"
+  master_username: "admin"
+  port: 5439
+  encrypted: true
+  publicly_accessible: false
+  vpc_security_group_ids: []
+  cluster_subnet_group_name: "etl-redshift-subnet-group"
+
+airflow:
+  environment_name: "etl-mwaa-environment"
+  airflow_version: "2.5.1"
+  environment_class: "mw1.small"
+  max_workers: 10
+  min_workers: 1
+  schedulers: 2
+  dag_s3_path: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/dags/"
+  requirements_s3_path: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/requirements.txt"
+  plugins_s3_path: "s3://cloud-etl-pipeline-scripts-${AWS_ACCOUNT_ID}/plugins.zip"
+
+lambda:
+  s3_trigger:
+    function_name: "etl-s3-trigger-handler"
+    runtime: "python3.10"
+    timeout: 300
+    memory_size: 512
+  glue_trigger:
+    function_name: "etl-glue-job-trigger"
+    runtime: "python3.10"
+    timeout: 900
+    memory_size: 1024
+  kinesis_processor:
+    function_name: "etl-kinesis-processor"
+    runtime: "python3.10"
+    timeout: 60
+    memory_size: 512
+
+kinesis:
+  streams:
+    ecommerce_events:
+      name: "ecommerce-live-orders"
+      shard_count: 2
+      retention_hours: 24
+  analytics:
+    application_name: "ecommerce-flink-processor"
+    runtime_environment: "FLINK-1_15"
+
+sagemaker:
+  healthcare_ml:
+    model_name: "heart-disease-classifier"
+    instance_type: "ml.m5.xlarge"
+    endpoint_name: "heart-disease-prediction"
+    pipeline_name: "healthcare-ml-pipeline"
+
+cloudwatch:
+  log_retention_days: 30
+  alarm_sns_topic: "etl-pipeline-alerts"
+  dashboards:
+    - "ETL-Pipeline-Overview"
+    - "Data-Quality-Metrics"
+    - "Cost-Monitoring"
+
+secrets_manager:
+  kaggle_api_key: "etl/kaggle/api-credentials"
+  redshift_credentials: "etl/redshift/master-credentials"
+  rds_credentials: "etl/rds/credentials"
+
+step_functions:
+  state_machines:
+    ecommerce: "ecommerce-pipeline-orchestrator"
+    healthcare: "healthcare-pipeline-orchestrator"
+    finance: "finance-pipeline-orchestrator"
+    sports: "sports-pipeline-orchestrator"
+    climate: "climate-pipeline-orchestrator"

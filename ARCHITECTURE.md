@@ -141,6 +141,7 @@ DataFrame → Prepare Data → Batch Insert → Commit → Log Results
 - Validate configuration
 - Provide access to settings
 - Support different environments
+- Support optional AWS helper configuration via `config/aws_config.yaml` and dataset definitions in `config/domains.yaml`
 
 **Key Classes:**
 - `DatabaseConfig`: Database connection settings

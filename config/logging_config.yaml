@@ -1,0 +1,87 @@
+# Logging Configuration
+version: 1
+disable_existing_loggers: false
+
+formatters:
+  standard:
+    format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  detailed:
+    format: '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(funcName)s() - %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+  
+  json:
+    class: pythonjsonlogger.jsonlogger.JsonFormatter
+    format: '%(asctime)s %(name)s %(levelname)s %(message)s'
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: standard
+    stream: ext://sys.stdout
+  
+  file:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/etl_pipeline.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+  
+  error_file:
+    class: logging.handlers.RotatingFileHandler
+    level: ERROR
+    formatter: detailed
+    filename: logs/etl_errors.log
+    maxBytes: 10485760  # 10MB
+    backupCount: 5
+  
+  cloudwatch:
+    class: watchtower.CloudWatchLogHandler
+    level: INFO
+    formatter: json
+    log_group: /aws/etl-pipeline
+    stream_name: '{logger_name}'
+
+root:
+  level: INFO
+  handlers:
+    - console
+    - file
+    - error_file
+
+loggers:
+  ingest:
+    level: DEBUG
+    handlers:
+      - console
+      - file
+    propagate: false
+  
+  etl:
+    level: DEBUG
+    handlers:
+      - console
+      - file
+    propagate: false
+  
+  quality:
+    level: INFO
+    handlers:
+      - console
+      - file
+    propagate: false
+  
+  boto3:
+    level: WARNING
+    handlers:
+      - console
+    propagate: false
+  
+  botocore:
+    level: WARNING
+    handlers:
+      - console
+    propagate: false

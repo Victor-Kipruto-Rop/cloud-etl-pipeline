@@ -4,5 +4,11 @@ __pycache__/
 .coverage
 .vscode/
 .env
+.kaggle.json
+kaggle.json
+.pytest_cache/
 data/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/analytics/.gitkeep
 logs/*

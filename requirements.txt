@@ -17,4 +17,7 @@ pandera
 tenacity
 prometheus-client
 pytz
+boto3
+kaggle
+pyarrow
 testcontainers[postgres]

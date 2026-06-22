@@ -1,0 +1,109 @@
+# Domain-specific pipeline configurations
+domains:
+  ecommerce:
+    name: "E-commerce / Retail Sales"
+    kaggle_dataset: "olistbr/brazilian-ecommerce"
+    description: "Brazilian e-commerce public dataset of orders made at Olist Store"
+    files:
+      - "olist_customers_dataset.csv"
+      - "olist_orders_dataset.csv"
+      - "olist_order_items_dataset.csv"
+      - "olist_products_dataset.csv"
+      - "olist_sellers_dataset.csv"
+      - "olist_order_payments_dataset.csv"
+      - "olist_order_reviews_dataset.csv"
+      - "product_category_name_translation.csv"
+    raw_path: "s3://{bucket}/raw/ecommerce/{date}/"
+    processed_path: "s3://{bucket}/processed/ecommerce/{date}/"
+    partition_columns:
+      - "order_year"
+      - "order_month"
+    fact_table: "fact_orders"
+    dimension_tables:
+      - "dim_customers"
+      - "dim_products"
+      - "dim_sellers"
+      - "dim_dates"
+    
+  healthcare:
+    name: "Healthcare / Medical Data"
+    kaggle_dataset: "uciml/heart-disease-uci"
+    description: "Heart disease UCI dataset for medical analysis"
+    files:
+      - "heart.csv"
+    raw_path: "s3://{bucket}/raw/healthcare/{date}/"
+    processed_path: "s3://{bucket}/processed/healthcare/{date}/"
+    partition_columns:
+      - "diagnosis_year"
+      - "age_group"
+    fact_table: "fact_diagnoses"
+    dimension_tables:
+      - "dim_patients"
+      - "dim_medical_tests"
+      - "dim_dates"
+    
+  finance:
+    name: "Finance / Stock Market"
+    kaggle_dataset: "borismarjanovic/price-volume-data-for-all-us-stocks-etfs"
+    description: "Price and volume data for all US stocks and ETFs"
+    files:
+      - "Stocks/*.txt"
+      - "ETFs/*.txt"
+    raw_path: "s3://{bucket}/raw/finance/{date}/"
+    processed_path: "s3://{bucket}/processed/finance/{date}/"
+    partition_columns:
+      - "trade_year"
+      - "trade_month"
+    fact_table: "fact_stock_prices"
+    dimension_tables:
+      - "dim_stocks"
+      - "dim_exchanges"
+      - "dim_dates"
+    
+  sports:
+    name: "Sports Analytics"
+    kaggle_dataset: "hugomathien/soccer"
+    description: "European soccer database with matches, players, and teams"
+    files:
+      - "database.sqlite"
+    raw_path: "s3://{bucket}/raw/sports/{date}/"
+    processed_path: "s3://{bucket}/processed/sports/{date}/"
+    partition_columns:
+      - "season_year"
+      - "league_id"
+    fact_table: "fact_matches"
+    dimension_tables:
+      - "dim_teams"
+      - "dim_players"
+      - "dim_leagues"
+      - "dim_dates"
+    
+  climate:
+    name: "Climate / Environment"
+    kaggle_dataset: "berkeleyearth/climate-change-earth-surface-temperature-data"
+    description: "Earth surface temperature data from Berkeley Earth"
+    files:
+      - "GlobalTemperatures.csv"
+      - "GlobalLandTemperaturesByCity.csv"
+      - "GlobalLandTemperaturesByCountry.csv"
+      - "GlobalLandTemperaturesByState.csv"
+    raw_path: "s3://{bucket}/raw/climate/{date}/"
+    processed_path: "s3://{bucket}/processed/climate/{date}/"
+    partition_columns:
+      - "measurement_year"
+      - "measurement_month"
+    fact_table: "fact_temperatures"
+    dimension_tables:
+      - "dim_locations"
+      - "dim_countries"
+      - "dim_dates"
+
+# Global configuration
+global:
+  bucket_name: "kipruto-data-engineering-bucket"
+  region: "us-west-1"
+  glue_database: "etl_catalog"
+  redshift_database: "analytics_dw"
+  log_level: "INFO"
+  retry_attempts: 3
+  retry_delay_seconds: 30

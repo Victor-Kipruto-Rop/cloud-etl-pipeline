@@ -52,6 +52,21 @@ class PipelineConfig:
     chunk_size: int = field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", 10000)))
     max_retries: int = field(default_factory=lambda: int(os.getenv("MAX_RETRIES", 3)))
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
+    kaggle_download: bool = field(
+        default_factory=lambda: os.getenv("KAGGLE_DOWNLOAD", "false").lower() == "true"
+    )
+    kaggle_dataset: Optional[str] = field(
+        default_factory=lambda: os.getenv("KAGGLE_DATASET")
+    )
+    kaggle_force: bool = field(
+        default_factory=lambda: os.getenv("KAGGLE_FORCE_DOWNLOAD", "false").lower() == "true"
+    )
+    kaggle_file_pattern: str = field(
+        default_factory=lambda: os.getenv("KAGGLE_FILE_PATTERN", "*.csv")
+    )
+    kaggle_quiet: bool = field(
+        default_factory=lambda: os.getenv("KAGGLE_QUIET", "true").lower() == "true"
+    )
 
     def validate(self) -> bool:
         """Validate and create required directories."""

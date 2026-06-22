@@ -7,7 +7,9 @@ This project now generates a visual dashboard automatically after the ETL pipeli
 - `visualizations/dashboard.html`
 - `visualizations/state_distribution.png`
 - `visualizations/condition_distribution.png`
+- `visualizations/sales_condition_distribution.png`
 - `visualizations/selling_price_vs_mmr.png`
+- `visualizations/top_10_dealers_by_sales.png`
 - `visualizations/top_sellers.png`
 
 ## What it includes

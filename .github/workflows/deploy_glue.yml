@@ -1,0 +1,51 @@
+name: Deploy Glue Scripts
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'etl/**'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: 'us-east-1'
+  SCRIPTS_BUCKET: 'cloud-etl-pipeline-scripts'
+
+jobs:
+  deploy-glue-scripts:
+    name: Deploy Glue ETL Scripts to S3
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Get AWS Account ID
+        id: account
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          echo "account_id=$ACCOUNT_ID" >> $GITHUB_OUTPUT
+      
+      - name: Sync Glue scripts to S3
+        run: |
+          aws s3 sync etl/ s3://${{ env.SCRIPTS_BUCKET }}-${{ steps.account.outputs.account_id }}/glue/ \
+            --exclude "*/test_*" \
+            --exclude "*/__pycache__/*" \
+            --exclude "*.pyc" \
+            --delete
+      
+      - name: List deployed scripts
+        run: |
+          echo "## Glue Scripts Deployed 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployed Files:" >> $GITHUB_STEP_SUMMARY
+          aws s3 ls s3://${{ env.SCRIPTS_BUCKET }}-${{ steps.account.outputs.account_id }}/glue/ --recursive | \
+            awk '{print "- " $4}' >> $GITHUB_STEP_SUMMARY

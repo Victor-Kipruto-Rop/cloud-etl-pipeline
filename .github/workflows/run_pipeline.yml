@@ -1,0 +1,103 @@
+name: Run ETL Pipeline
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  workflow_dispatch:
+    inputs:
+      domain:
+        description: 'Domain to run (ecommerce, healthcare, finance, sports, climate, all)'
+        required: true
+        default: 'ecommerce'
+        type: choice
+        options:
+          - ecommerce
+          - healthcare
+          - finance
+          - sports
+          - climate
+          - all
+      date:
+        description: 'Data date (YYYY-MM-DD), leave empty for today'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  run-pipeline:
+    name: Execute ETL Pipeline
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Set execution date
+        id: date
+        run: |
+          if [ -z "${{ github.event.inputs.date }}" ]; then
+            DATE=$(date +%Y-%m-%d)
+          else
+            DATE="${{ github.event.inputs.date }}"
+          fi
+          echo "execution_date=$DATE" >> $GITHUB_OUTPUT
+      
+      - name: Run Glue Job - E-commerce
+        if: github.event.inputs.domain == 'ecommerce' || github.event.inputs.domain == 'all' || github.event_name == 'schedule'
+        id: glue_ecommerce
+        run: |
+          JOB_RUN_ID=$(aws glue start-job-run \
+            --job-name ecommerce-transform-job \
+            --arguments '{"--INGESTION_DATE":"${{ steps.date.outputs.execution_date }}"}' \
+            --query 'JobRunId' \
+            --output text)
+          echo "job_run_id=$JOB_RUN_ID" >> $GITHUB_OUTPUT
+      
+      - name: Wait for Glue Job Completion
+        if: steps.glue_ecommerce.outputs.job_run_id
+        run: |
+          echo "Waiting for Glue job to complete..."
+          aws glue wait job-run-complete \
+            --job-name ecommerce-transform-job \
+            --run-id ${{ steps.glue_ecommerce.outputs.job_run_id }}
+          echo "Glue job completed successfully!"
+      
+      - name: Run Glue Crawler
+        if: steps.glue_ecommerce.outputs.job_run_id
+        run: |
+          aws glue start-crawler --name ecommerce-crawler
+          aws glue wait crawler-stopped --name ecommerce-crawler
+          echo "Glue crawler completed successfully!"
+      
+      - name: Create execution summary
+        if: success()
+        run: |
+          echo "## ETL Pipeline Execution Complete! ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Domain:** ${{ github.event.inputs.domain || 'ecommerce' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Date:** ${{ steps.date.outputs.execution_date }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Glue Job Run ID:** ${{ steps.glue_ecommerce.outputs.job_run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pipeline Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Data ingestion from Kaggle" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ AWS Glue ETL transformation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Glue crawler catalog update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Data is now available in S3 and queryable via Athena!"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          aws sns publish \
+            --topic-arn arn:aws:sns:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:etl-pipeline-alerts \
+            --subject "ETL Pipeline Failure" \
+            --message "Pipeline execution failed for domain: ${{ github.event.inputs.domain || 'ecommerce' }}"
