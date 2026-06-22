@@ -47,7 +47,7 @@ def test_copy_loader_perf():
             table_name = f"perf_test_{int(datetime.now().timestamp())}"
             cols_sql = ", ".join([f"c{i} bigint" for i in range(cols)])
             with db.engine.begin() as conn:
-                conn.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({cols_sql});")
+                conn.exec_driver_sql(f"CREATE TABLE IF NOT EXISTS {table_name} ({cols_sql});")
 
             start = time.time()
             try:
@@ -63,7 +63,7 @@ def test_copy_loader_perf():
             )
 
             with db.engine.begin() as conn:
-                conn.execute(f"DROP TABLE IF EXISTS {table_name};")
+                conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name};")
             db.disconnect()
     else:
         db = DatabaseManager()
@@ -75,7 +75,7 @@ def test_copy_loader_perf():
         table_name = f"perf_test_{int(datetime.now().timestamp())}"
         cols_sql = ", ".join([f"c{i} bigint" for i in range(cols)])
         with db.engine.begin() as conn:
-            conn.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({cols_sql});")
+            conn.exec_driver_sql(f"CREATE TABLE IF NOT EXISTS {table_name} ({cols_sql});")
 
         start = time.time()
         try:
@@ -89,5 +89,5 @@ def test_copy_loader_perf():
         print(f"Loaded {loaded} rows in {duration:.2f}s ({loaded/duration:.0f} rows/s)")
 
         with db.engine.begin() as conn:
-            conn.execute(f"DROP TABLE IF EXISTS {table_name};")
+            conn.exec_driver_sql(f"DROP TABLE IF EXISTS {table_name};")
         db.disconnect()

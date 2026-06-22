@@ -1,9 +1,9 @@
 """Dashboard generation for ETL pipeline outputs."""
 
 import logging
+import re
 from pathlib import Path
 
-import re
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns

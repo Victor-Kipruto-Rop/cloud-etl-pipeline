@@ -3,11 +3,11 @@
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Dict, Optional, Iterable
+from typing import Dict, Iterable, Optional
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 import pandas as pd
+from botocore.exceptions import BotoCoreError, ClientError
 
 logger = logging.getLogger(__name__)
 
