@@ -16,3 +16,5 @@ matplotlib
 pandera
 tenacity
 prometheus-client
+pytz
+testcontainers[postgres]

@@ -1,0 +1,20 @@
+groups:
+  - name: etl.rules
+    rules:
+      - alert: ETLHighFailureRate
+        expr: rate(etl_files_failed_total[5m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ETL failing at high rate"
+          description: "More than 0 failures per 5m ({{ $value }})"
+
+      - alert: ETLLongRunningJob
+        expr: increase(etl_files_processed_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: warning
+        annotations:
+          summary: "ETL pipeline not processing files"
+          description: "No files processed in the last hour"

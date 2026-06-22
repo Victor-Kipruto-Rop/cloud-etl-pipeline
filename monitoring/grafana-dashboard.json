@@ -1,0 +1,35 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "#000000",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "title": "ETL Pipeline Overview",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Files Processed",
+      "targets": [{"expr": "etl_files_processed_total"}]
+    },
+    {
+      "type": "stat",
+      "title": "Files Failed",
+      "targets": [{"expr": "etl_files_failed_total"}]
+    },
+    {
+      "type": "graph",
+      "title": "Rows Loaded /s",
+      "targets": [{"expr": "rate(etl_rows_loaded_total[1m])"}]
+    }
+  ],
+  "schemaVersion": 16,
+  "version": 1
+}

@@ -2,9 +2,11 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main, develop ]
+  schedule:
+    - cron: '0 3 * * 0' # weekly on Sunday 03:00 UTC
 
 jobs:
   test:
@@ -95,7 +97,7 @@ jobs:
 
   perf:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'schedule'
     services:
       postgres:
         image: postgres:15
