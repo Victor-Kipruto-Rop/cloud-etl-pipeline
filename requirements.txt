@@ -2,3 +2,12 @@ pandas
 sqlalchemy
 psycopg2-binary
 python-dotenv
+flask
+flask-cors
+schedule
+pytest
+pytest-cov
+flake8
+black
+isort
+pylint

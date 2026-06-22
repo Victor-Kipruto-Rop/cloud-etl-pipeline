@@ -1,14 +1,15 @@
-### Collaboration
-This project includes collaborative commits to demonstrate teamwork.
-
-
+<p align="center">
+    <img src="diagrams/etl.png" alt="ETL Pipeline" style="max-width:100%;height:auto;"/>
+</p>
 
 > **Extract-Transform-Load system** for processing large-scale datasets with robust error handling, comprehensive logging, and database integration.
 
+[![CI](https://github.com/Victor-Kipruto-Rop/cloud-etl-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Victor-Kipruto-Rop/cloud-etl-pipeline/actions)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![PostgreSQL 15+](https://img.shields.io/badge/postgresql-15+-green.svg)](https://www.postgresql.org/)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Test Coverage](https://img.shields.io/badge/coverage-42%25-yellowgreen.svg)](tests/)
 
 ## 📋 Table of Contents
 
@@ -19,15 +20,15 @@ This project includes collaborative commits to demonstrate teamwork.
 5. [How to Run Locally](#how-to-run-locally)
 6. [Sample Queries](#sample-queries)
 7. [Key Learnings](#key-learnings)
-8. [Future Improvements](#future-improvements)
+8. [Next Steps](#next-steps)
 
 ---
 
 ## 🎯 Project Overview
 
-### What It Does
+### WhDoes
 
-The **Cloud ETL Pipeline** is a comprehensive data processing system that:
+The **ETL Pipeline** is a comprehensive data processing system that:
 
 - **Extracts** data from multiple CSV files with automatic encoding detection
 - **Transforms** data with comprehensive cleaning (normalization, deduplication, type conversion)
@@ -59,13 +60,17 @@ The **Cloud ETL Pipeline** is a comprehensive data processing system that:
 | **Memory Efficiency** | Chunked processing (50MB+ files) |
 | **Error Recovery** | 3 automatic retries |
 | **Database Throughput** | 12K rows/sec (with pooling) |
-| **Code Coverage** | Unit tests for extract/transform/load |
+| **Code Coverage** | 42% (measured via `pytest --cov=src`) |
 
 ---
 
 ## 🏗️ Architecture
 
 ### System Diagram
+
+![ETL Pipeline Architecture](diagrams/etl_architecture.svg)
+
+**Architecture Overview**: The pipeline follows a classic Extract-Transform-Load (ETL) pattern:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -313,7 +318,7 @@ psql --version     # Should be 15+
 #### Step 1: Clone and Install
 
 ```bash
-cd /home/kipruto/Desktop/cloud-etl-pipeline
+cd cloud-etl-pipeline
 
 # Create virtual environment
 python3 -m venv .venv
@@ -625,118 +630,19 @@ load_df_to_postgres(df, 'test_table')  # Creates table automatically
 
 ---
 
-## 🔮 Future Improvements
+## 🔮 Next Steps
 
-### Phase 1: Enhanced Data Quality (Next Sprint)
-
-```python
-# ✓ Advanced outlier detection
-def detect_outliers(df, columns, method='iqr'):
-    """IQR or Z-score based outlier detection"""
-    Q1 = df[columns].quantile(0.25)
-    Q3 = df[columns].quantile(0.75)
-    IQR = Q3 - Q1
-    outliers = (df[columns] < Q1 - 1.5*IQR) | (df[columns] > Q3 + 1.5*IQR)
-    return df[~outliers.any(axis=1)]
-
-# ✓ Schema validation before load
-def validate_schema(df, expected_schema):
-    """Ensure columns match expected types"""
-    for col, dtype in expected_schema.items():
-        assert col in df.columns
-        assert df[col].dtype == dtype
-
-# ✓ Data profiling
-def profile_data(df):
-    """Generate data quality report"""
-    return {
-        'row_count': len(df),
-        'null_pct': df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100,
-        'duplicate_count': df.duplicated().sum(),
-        'memory_mb': df.memory_usage().sum() / 1024**2
-    }
-```
-
-### Phase 2: Scalability (Quarter 2)
-
-- **Parallel Processing**: Process multiple files concurrently
-  ```python
-  from concurrent.futures import ThreadPoolExecutor
-  with ThreadPoolExecutor(max_workers=4) as executor:
-      futures = [executor.submit(process_file, f) for f in csv_files]
-  ```
-
-- **Incremental Loading**: Support CDC (Change Data Capture)
-  ```python
-  # Only load changed rows, not entire dataset
-  load_incremental(df, table_name, key_columns=['id'])
-  ```
-
-- **Distributed Processing**: Apache Spark for 10B+ rows
-  ```python
-  from pyspark.sql import SparkSession
-  spark = SparkSession.builder.appName("ETL").getOrCreate()
-  df = spark.read.csv("large_dataset.csv")
-  ```
-
-### Phase 3: Monitoring & Observability (Quarter 3)
-
-- **Metrics Export**:
-  ```python
-  # Prometheus metrics
-  extraction_duration = Histogram('extraction_duration_seconds')
-  rows_loaded = Counter('rows_loaded_total')
-  ```
-
-- **Data Lineage Tracking**:
-  ```python
-  # Opensearch for data lineage
-  log_lineage(source='sales.csv', target='sales_table', timestamp=now())
-  ```
-
-- **Alerting**:
-  ```python
-  if load_duration > 60:
-      alert('slack', 'Load took >60s')
-  if error_count > threshold:
-      alert('pagerduty', 'Pipeline failed')
-  ```
-
-### Phase 4: Advanced Features (Quarter 4)
-
-- **Data Validation Framework**:
-  ```python
-  @validate
-  def transform_sales(df):
-      assert df['price'] > 0, "Price must be positive"
-      assert df['date'] <= today(), "Date cannot be future"
-      return df
-  ```
-
-- **Schema Evolution**:
-  ```python
-  # Handle new columns gracefully
-  def auto_migrate_schema(df, table_name):
-      existing = get_table_schema(table_name)
-      new_cols = set(df.columns) - set(existing)
-      for col in new_cols:
-          add_column(table_name, col, infer_type(df[col]))
-  ```
-
-- **API Endpoint**:
-  ```python
-  # Expose pipeline as REST API
-  @app.post("/api/pipeline/run")
-  def run_pipeline(source: str, target: str):
-      return process_pipeline(source, target)
-  ```
+- Outlier detection in the transform phase (IQR or model-based)
+- Parallel file processing to increase throughput (worker pool)
+- Incremental loading / CDC support to avoid full reloads
+- Basic monitoring (export extraction/transform/load metrics)
 
 ---
 
 ## 📁 Project Structure
 
 ```
-cloud-etl-pipeline/
+etl-pipeline/
 ├── src/
 │   ├── extract/extract_data.py          # DataExtractor class (100 lines)
 │   ├── transform/transform_data.py      # Transform functions (150 lines)
@@ -822,15 +728,24 @@ docker compose up --build
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Data Source
+
+This project uses the **Used Car Auction Prices** dataset (sourced from public Kaggle datasets). The data represents vehicle sales transactions with price, condition, mileage, and dealer information.
+
+- Dataset: https://www.kaggle.com/datasets (search: "Used Car Auction Prices")
+- License: Kaggle Terms of Service
+
+---
+
 ## 👨‍💻 Author
 
-**Kipruto** - Full-stack data engineer
+**Victor Kipruto Rop** — Full-stack data engineer
 
-- GitHub: [@kipruto](https://github.com/kipruto)
-- LinkedIn: [kipruto](https://linkedin.com/in/kipruto)
+- GitHub: [Victor-Kipruto-Rop](https://github.com/Victor-Kipruto-Rop)
+- LinkedIn: [Victor Kipruto Rop](https://linkedin.com/in/victor-kipruto-rop)
 
 ---
 
 **Last Updated**: January 31, 2026  
-**Status**: ✅ Production Ready  
-**Version**: 1.0.0
+**Status**: Active, well-tested (pre-release)  
+**Version**: 0.1.0-pre

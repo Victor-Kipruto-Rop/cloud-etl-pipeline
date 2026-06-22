@@ -57,7 +57,7 @@ class DataExtractor:
             ExtractionError: If validation fails
         """
         if not file_path.exists():
-            raise ExtractionError(f"File not found: {file_path}")
+            raise FileNotFoundError(f"File not found: {file_path}")
         
         if not file_path.is_file():
             raise ExtractionError(f"Path is not a file: {file_path}")
@@ -157,6 +157,9 @@ class DataExtractor:
             msg = f"CSV parse error: {e}"
             logger.error(msg)
             raise ExtractionError(msg) from e
+        except FileNotFoundError:
+            # Let FileNotFoundError propagate for callers/tests that expect it
+            raise
         except ExtractionError:
             raise
         except Exception as e:
