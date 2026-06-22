@@ -2,8 +2,10 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, Any
-from sqlalchemy import text, create_engine
+from typing import Any, Dict
+
+from sqlalchemy import create_engine, text
+
 from src.config import get_config
 
 logger = logging.getLogger(__name__)

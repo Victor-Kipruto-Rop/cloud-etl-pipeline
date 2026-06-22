@@ -1,25 +1,26 @@
-import unittest
-from unittest.mock import patch, MagicMock
-import tempfile
-import shutil
 import os
-from pathlib import Path
+import runpy
+import shutil
 import sqlite3
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
 from sqlalchemy import create_engine
-import runpy
 
+from src.api import app, create_app, schedule_pipeline_job
 from src.config import DatabaseConfig, PipelineConfig, get_config, reload_config
+from src.extract.extract_data import DataExtractor, ExtractionError
 from src.health import HealthChecker
 from src.migrations import MigrationManager
 from src.pipeline import PipelineStats, process_file, run
 from src.transform.transform_data import (
-    transform,
     handle_missing_values,
     normalize_columns,
+    transform,
 )
-from src.extract.extract_data import DataExtractor, ExtractionError
-from src.api import app, schedule_pipeline_job, create_app
 
 
 class TestConfigCoverage(unittest.TestCase):
@@ -212,9 +213,11 @@ class TestExtractCoverage(unittest.TestCase):
 
     def test_extract_chunked(self):
         extractor = DataExtractor()
-        with patch("pathlib.Path.is_file", return_value=True), patch(
-            "pathlib.Path.stat"
-        ) as mock_stat, patch("pandas.read_csv") as mock_read:
+        with (
+            patch("pathlib.Path.is_file", return_value=True),
+            patch("pathlib.Path.stat") as mock_stat,
+            patch("pandas.read_csv") as mock_read,
+        ):
             mock_stat.return_value = MagicMock(
                 st_size=60 * 1024 * 1024, st_mode=0o100644
             )

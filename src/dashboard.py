@@ -1,9 +1,10 @@
 """Dashboard generation for ETL pipeline outputs."""
 
-from pathlib import Path
 import logging
-import pandas as pd
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
 
 logger = logging.getLogger(__name__)

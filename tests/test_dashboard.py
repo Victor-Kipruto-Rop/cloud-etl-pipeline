@@ -1,7 +1,9 @@
+import tempfile
 import unittest
 from pathlib import Path
-import tempfile
+
 import pandas as pd
+
 from src.dashboard import generate_dashboard
 
 

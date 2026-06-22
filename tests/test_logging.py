@@ -1,8 +1,8 @@
 """Tests for logging configuration and validation."""
 
-import unittest
 import logging
 import tempfile
+import unittest
 from pathlib import Path
 
 from src.logging_config import LogConfig, LogValidator, test_logging

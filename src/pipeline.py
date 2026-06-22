@@ -1,15 +1,19 @@
-import os
-from pathlib import Path
 import logging
+import os
 import sys
-from datetime import datetime
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from threading import Lock
+
 from dotenv import load_dotenv
 
-from src.extract.extract_data import extract_csv, ExtractionError
-from src.transform.transform_data import transform, TransformError
-from src.load.load_to_db import load_df_to_postgres, LoadError
 from src.dashboard import generate_dashboard
+from src.extract.extract_data import ExtractionError, extract_csv
+from src.load.load_to_db import LoadError, load_df_to_postgres
+from src.transform.transform_data import TransformError, transform
+from src.validation import ValidationError, parse_required_columns, validate_df
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,7 +36,7 @@ PROCESSED_DIR = Path("data/processed")
 
 
 class PipelineStats:
-    """Track pipeline execution statistics."""
+    """Track pipeline execution statistics with thread-safety."""
 
     def __init__(self):
         self.files_processed = 0
@@ -41,6 +45,17 @@ class PipelineStats:
         self.rows_transformed = 0
         self.rows_loaded = 0
         self.errors = []
+        self._lock = Lock()
+
+    def incr(self, **kwargs):
+        with self._lock:
+            for k, v in kwargs.items():
+                if hasattr(self, k):
+                    setattr(self, k, getattr(self, k) + v)
+
+    def add_error(self, msg: str):
+        with self._lock:
+            self.errors.append(msg)
 
     def log_stats(self):
         """Log final statistics."""
@@ -81,14 +96,21 @@ def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> 
             # Extract
             logger.info(f"[Attempt {attempt}/{max_retries}] Extracting...")
             df = extract_csv(csv_file)
-            stats.rows_extracted += len(df)
+            stats.incr(rows_extracted=len(df))
+
+            # Validate
+            required = parse_required_columns(os.getenv("REQUIRED_COLUMNS"))
+            try:
+                validate_df(df, required_columns=required)
+            except ValidationError as e:
+                raise TransformError(f"Validation failed: {e}")
 
             # Transform
             logger.info("Transforming...")
             df_transformed = transform(
                 df, normalize_cols=True, handle_missing="drop_all"
             )
-            stats.rows_transformed += len(df_transformed)
+            stats.incr(rows_transformed=len(df_transformed))
 
             # Save processed file
             out_file = PROCESSED_DIR / csv_file.name
@@ -101,14 +123,14 @@ def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> 
                 try:
                     logger.info("Loading to database...")
                     loaded = load_df_to_postgres(df_transformed, csv_file.stem)
-                    stats.rows_loaded += loaded
+                    stats.incr(rows_loaded=loaded)
                 except LoadError as e:
                     logger.warning(f"Database load skipped: {e}")
             else:
                 logger.debug("POSTGRES_HOST not set, skipping database load")
 
             logger.info(f"✓ {csv_file.name} processed successfully")
-            stats.files_processed += 1
+            stats.incr(files_processed=1)
             return True
 
         except (ExtractionError, TransformError, LoadError) as e:
@@ -118,15 +140,38 @@ def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> 
             else:
                 error_msg = f"{csv_file.name}: {e}"
                 logger.error(f"✗ {error_msg}")
-                stats.errors.append(error_msg)
-                stats.files_failed += 1
+                stats.add_error(error_msg)
+                stats.incr(files_failed=1)
+                # move offending file to quarantine
+                quarantine = RAW_DIR / "quarantine"
+                quarantine.mkdir(parents=True, exist_ok=True)
+                target = (
+                    quarantine
+                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                )
+                try:
+                    csv_file.replace(target)
+                    logger.info(f"Moved failed file to quarantine: {target}")
+                except Exception:
+                    logger.warning(f"Failed to move {csv_file} to quarantine")
                 return False
         except Exception as e:
             error_msg = f"{csv_file.name}: Unexpected error: {e}"
             logger.error(f"✗ {error_msg}")
             logger.debug(traceback.format_exc())
-            stats.errors.append(error_msg)
-            stats.files_failed += 1
+            stats.add_error(error_msg)
+            stats.incr(files_failed=1)
+            try:
+                quarantine = RAW_DIR / "quarantine"
+                quarantine.mkdir(parents=True, exist_ok=True)
+                target = (
+                    quarantine
+                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                )
+                csv_file.replace(target)
+                logger.info(f"Moved unexpected-failure file to quarantine: {target}")
+            except Exception:
+                logger.warning(f"Failed to move {csv_file} to quarantine")
             return False
 
     return False
@@ -157,9 +202,26 @@ def run():
     for f in csv_files:
         logger.info(f"  - {f.name}")
 
-    # Process each file
-    for csv_file in csv_files:
-        process_file(csv_file, stats)
+    # Batch processing
+    batch_size = int(os.getenv("BATCH_SIZE", "10"))
+    parallel_workers = int(os.getenv("PARALLEL_WORKERS", "1"))
+
+    for i in range(0, len(csv_files), batch_size):
+        batch = csv_files[i : i + batch_size]
+        logger.info(f"Processing batch {i//batch_size + 1}: {len(batch)} file(s)")
+
+        if parallel_workers > 1:
+            with ThreadPoolExecutor(max_workers=parallel_workers) as exc:
+                futures = {exc.submit(process_file, f, stats): f for f in batch}
+                for fut in as_completed(futures):
+                    f = futures[fut]
+                    try:
+                        fut.result()
+                    except Exception as e:
+                        logger.error(f"Error processing {f}: {e}")
+        else:
+            for csv_file in batch:
+                process_file(csv_file, stats)
 
     # Log final statistics
     stats.log_stats()

@@ -1,8 +1,9 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pandas as pd
 
-from src.load.load_to_db import load_df_to_postgres, DatabaseManager, LoadError
+from src.load.load_to_db import DatabaseManager, LoadError, load_df_to_postgres
 
 
 class TestLoadModule(unittest.TestCase):

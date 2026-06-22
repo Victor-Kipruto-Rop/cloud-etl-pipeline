@@ -1,12 +1,13 @@
-import unittest
-import pandas as pd
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+import unittest
+from pathlib import Path
+
+import pandas as pd
 
 from src.extract.extract_data import extract_csv
-from src.transform.transform_data import transform
 from src.load.load_to_db import load_df_to_postgres
+from src.transform.transform_data import transform
 
 
 class TestExtract(unittest.TestCase):

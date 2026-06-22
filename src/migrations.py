@@ -1,11 +1,12 @@
 """Database migration system for ETL pipeline schema management."""
 
 import logging
-from pathlib import Path
 from datetime import datetime
-from sqlalchemy import text
-import sqlalchemy as sa
+from pathlib import Path
 from typing import Optional
+
+import sqlalchemy as sa
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 

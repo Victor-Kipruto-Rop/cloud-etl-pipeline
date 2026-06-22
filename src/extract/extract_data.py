@@ -3,11 +3,12 @@ Robust data extraction module with advanced features.
 Supports multiple formats, encoding detection, chunking, and validation.
 """
 
-from pathlib import Path
-import pandas as pd
 import logging
-from typing import Optional, Dict, Any, List
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

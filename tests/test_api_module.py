@@ -1,6 +1,6 @@
-import unittest
-from unittest.mock import patch, MagicMock
 import json
+import unittest
+from unittest.mock import MagicMock, patch
 
 from src.api import create_app
 

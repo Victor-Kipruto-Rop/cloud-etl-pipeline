@@ -1,17 +1,18 @@
 """REST API and scheduler for ETL pipeline."""
 
-import logging
 import asyncio
+import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any
+from pathlib import Path
+from typing import Any, Dict
+
+import schedule
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import schedule
-from pathlib import Path
 
-from src.pipeline import run as run_pipeline
-from src.health import HealthChecker
 from src.config import get_config
+from src.health import HealthChecker
+from src.pipeline import run as run_pipeline
 
 logger = logging.getLogger(__name__)
 
