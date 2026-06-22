@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: etl-load-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: etl
+          image: ghcr.io/your-org/cloud-etl-pipeline:latest
+          env:
+            - name: POSTGRES_HOST
+              value: "postgres"
+            - name: BATCH_SIZE
+              value: "10"
+            - name: PARALLEL_WORKERS
+              value: "2"
+          command: ["python","-m","src.pipeline"]
+      restartPolicy: Never
+  backoffLimit: 2

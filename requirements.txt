@@ -13,3 +13,6 @@ isort
 pylint
 seaborn
 matplotlib
+pandera
+tenacity
+prometheus-client
