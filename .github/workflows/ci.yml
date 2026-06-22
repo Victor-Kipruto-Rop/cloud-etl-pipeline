@@ -78,11 +78,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v5
     
+    - name: Create env file for Docker config validation
+      run: |
+        cp .env.example .env 2>/dev/null || true
+
     - name: Build Docker image
       run: docker build -t cloud-etl-pipeline:latest .
-    
+
     - name: Test Docker image
       run: |
         docker compose config

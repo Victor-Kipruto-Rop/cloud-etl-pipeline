@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETL Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1, h2 { color: #2c3e50; }
+    .summary { margin-bottom: 24px; }
+    .chart { margin-bottom: 40px; }
+    img { max-width: 100%; height: auto; border: 1px solid #ccc; padding: 8px; background: #fff; }
+  </style>
+</head>
+<body>
+  <h1>ETL Dashboard</h1>
+  <section class="summary">
+    <h2>Summary</h2>
+    <ul>
+      <li><strong>Processed Rows:</strong> 558837</li>
+      <li><strong>Columns:</strong> year, make, model, trim, body, transmission, vin, state, condition, odometer, color, interior, seller, mmr, sellingprice, saledate</li>
+      <li><strong>Missing Values:</strong> 123376</li>
+    </ul>
+  </section>
+  <section class="chart">
+    <h2>State Distribution</h2>
+    <img src="state_distribution.png" alt="state_distribution">
+  </section>
+  <section class="chart">
+    <h2>Condition Distribution</h2>
+    <img src="condition_distribution.png" alt="condition_distribution">
+  </section>
+  <section class="chart">
+    <h2>Selling Price Vs Mmr</h2>
+    <img src="selling_price_vs_mmr.png" alt="selling_price_vs_mmr">
+  </section>
+  <section class="chart">
+    <h2>Top Sellers</h2>
+    <img src="top_sellers.png" alt="top_sellers">
+  </section>
+</body>
+</html>
