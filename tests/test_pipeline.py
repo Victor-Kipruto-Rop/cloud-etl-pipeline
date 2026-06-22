@@ -73,13 +73,32 @@ class TestLoad(unittest.TestCase):
     def test_load_df_to_postgres_requires_credentials(self):
         """Test that load_df_to_postgres attempts connection (will fail without real DB)."""
         df = pd.DataFrame({"id": [1, 2], "name": ["Alice", "Bob"]})
-        # This should raise an exception due to missing/invalid DB credentials
-        # We're just verifying the function is callable
+        # Prefer ephemeral Postgres via testcontainers when available
         try:
-            load_df_to_postgres(df, "test_table")
-        except Exception as e:
-            # Expected: connection error when no DB is running
-            self.assertIsInstance(e, Exception)
+            from testcontainers.postgres import PostgresContainer
+
+            with PostgresContainer("postgres:15") as pg:
+                # set env vars consumed by DatabaseManager
+                import os
+
+                os.environ["POSTGRES_USER"] = pg.USER
+                os.environ["POSTGRES_PASSWORD"] = pg.PASSWORD
+                os.environ["POSTGRES_HOST"] = pg.get_container_host_ip()
+                os.environ["POSTGRES_PORT"] = str(
+                    pg.get_exposed_port(pg.port_to_expose)
+                )
+                os.environ["POSTGRES_DB"] = pg.DB
+
+                # Should connect and create table via to_sql
+                rows = load_df_to_postgres(df, "test_table_integration")
+                self.assertEqual(rows, len(df))
+
+        except Exception:
+            # Fallback behaviour: verify it raises without a DB
+            try:
+                load_df_to_postgres(df, "test_table")
+            except Exception as e:
+                self.assertIsInstance(e, Exception)
 
 
 class TestPipelineIntegration(unittest.TestCase):

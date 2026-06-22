@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'etl'
+    # Adjust target to where your ETL metrics exporter is listening.
+    # When running via docker-compose, replace 'host.docker.internal' with the
+    # host address reachable from containers, or use a sidecar exporter.
+    static_configs:
+      - targets: ['host.docker.internal:8000', 'localhost:8000']
