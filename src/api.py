@@ -9,7 +9,7 @@ from flask_cors import CORS
 import schedule
 from pathlib import Path
 
-from src.pipeline import run_pipeline
+from src.pipeline import run as run_pipeline
 from src.health import HealthChecker
 from src.config import get_config
 

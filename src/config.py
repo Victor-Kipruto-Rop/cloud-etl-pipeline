@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 import logging
 
@@ -16,11 +16,11 @@ load_dotenv()
 @dataclass
 class DatabaseConfig:
     """Database configuration settings."""
-    host: str = os.getenv("POSTGRES_HOST", "localhost")
-    port: int = int(os.getenv("POSTGRES_PORT", 5432))
-    user: str = os.getenv("POSTGRES_USER", "postgres")
-    password: str = os.getenv("POSTGRES_PASSWORD", "postgres")
-    database: str = os.getenv("POSTGRES_DB", "etl_db")
+    host: str = field(default_factory=lambda: os.getenv("POSTGRES_HOST", "localhost"))
+    port: int = field(default_factory=lambda: int(os.getenv("POSTGRES_PORT", 5432)))
+    user: str = field(default_factory=lambda: os.getenv("POSTGRES_USER", "postgres"))
+    password: str = field(default_factory=lambda: os.getenv("POSTGRES_PASSWORD", "postgres"))
+    database: str = field(default_factory=lambda: os.getenv("POSTGRES_DB", "etl_db"))
     
     def get_connection_string(self) -> str:
         """Get SQLAlchemy connection string."""
@@ -37,12 +37,12 @@ class DatabaseConfig:
 @dataclass
 class PipelineConfig:
     """Pipeline configuration settings."""
-    raw_data_dir: Path = Path(os.getenv("RAW_DATA_DIR", "data/raw"))
-    processed_data_dir: Path = Path(os.getenv("PROCESSED_DATA_DIR", "data/processed"))
-    log_dir: Path = Path(os.getenv("LOG_DIR", "logs"))
-    chunk_size: int = int(os.getenv("CHUNK_SIZE", 10000))
-    max_retries: int = int(os.getenv("MAX_RETRIES", 3))
-    log_level: str = os.getenv("LOG_LEVEL", "INFO")
+    raw_data_dir: Path = field(default_factory=lambda: Path(os.getenv("RAW_DATA_DIR", "data/raw")))
+    processed_data_dir: Path = field(default_factory=lambda: Path(os.getenv("PROCESSED_DATA_DIR", "data/processed")))
+    log_dir: Path = field(default_factory=lambda: Path(os.getenv("LOG_DIR", "logs")))
+    chunk_size: int = field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", 10000)))
+    max_retries: int = field(default_factory=lambda: int(os.getenv("MAX_RETRIES", 3)))
+    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     
     def validate(self) -> bool:
         """Validate and create required directories."""
