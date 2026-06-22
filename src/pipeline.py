@@ -8,10 +8,22 @@ from pathlib import Path
 from threading import Lock
 
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
 
 from src.dashboard import generate_dashboard
 from src.extract.extract_data import ExtractionError, extract_csv
+from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
+from src.load.staging_loader import upsert_from_staging
+from src.metrics.metrics import (
+    files_failed,
+    files_processed,
+)
+from src.metrics.metrics import rows_extracted as metric_rows_extracted
+from src.metrics.metrics import rows_loaded as metric_rows_loaded
+from src.metrics.metrics import (
+    start_metrics_server,
+)
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
@@ -118,16 +130,29 @@ def process_file(csv_file: Path, stats: PipelineStats, max_retries: int = 3) -> 
             df_transformed.to_csv(out_file, index=False)
             logger.info(f"Saved {len(df_transformed)} rows")
 
-            # Load to database (optional, skip if DB not available)
-            if os.getenv("POSTGRES_HOST"):
+            # Load to database (optional, prefer COPY via engine if available)
+            if os.getenv("POSTGRES_HOST") or engine is not None:
                 try:
                     logger.info("Loading to database...")
-                    loaded = load_df_to_postgres(df_transformed, csv_file.stem)
+                    table_name = os.getenv("TARGET_TABLE", csv_file.stem)
+                    if engine is not None:
+                        cols = list(df_transformed.columns)
+                        loaded = copy_from_df(engine, df_transformed, table_name, cols)
+                        # metrics
+                        try:
+                            metric_rows_extracted.inc(len(df))
+                            metric_rows_loaded.inc(loaded)
+                        except Exception:
+                            pass
+                    else:
+                        loaded = load_df_to_postgres(df_transformed, csv_file.stem)
                     stats.incr(rows_loaded=loaded)
                 except LoadError as e:
                     logger.warning(f"Database load skipped: {e}")
             else:
-                logger.debug("POSTGRES_HOST not set, skipping database load")
+                logger.debug(
+                    "POSTGRES_HOST not set and no DATABASE_URL, skipping database load"
+                )
 
             logger.info(f"✓ {csv_file.name} processed successfully")
             stats.incr(files_processed=1)
@@ -185,6 +210,31 @@ def run():
     logger.info("=" * 80 + "\n")
 
     stats = PipelineStats()
+
+    # Start metrics server if requested
+    metrics_port = os.getenv("METRICS_PORT")
+    if metrics_port:
+        try:
+            start_metrics_server(int(metrics_port))
+        except Exception:
+            logger.warning("Could not start metrics server")
+
+    # Create DB engine if DATABASE_URL is provided (used by COPY loader)
+    database_url = os.getenv("DATABASE_URL")
+    engine = None
+    if database_url:
+        try:
+            pool_size = int(os.getenv("DB_POOL_SIZE", "10"))
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+            engine = create_engine(
+                database_url,
+                pool_size=pool_size,
+                max_overflow=max_overflow,
+                pool_pre_ping=True,
+            )
+            logger.info("Database engine created for COPY loader")
+        except Exception as e:
+            logger.warning(f"Failed to create DB engine: {e}")
 
     # Validate directories
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)

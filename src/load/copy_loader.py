@@ -2,9 +2,10 @@
 
 import io
 import logging
-from typing import List
+from typing import List, Union
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,9 @@ class LoadError(Exception):
     pass
 
 
-def copy_from_df(engine_url: str, df, table_name: str, columns: List[str]) -> int:
+def copy_from_df(
+    engine_or_url: Union[Engine, str], df, table_name: str, columns: List[str]
+) -> int:
     """Load a pandas DataFrame into Postgres using COPY for high throughput.
 
     Args:
@@ -31,7 +34,11 @@ def copy_from_df(engine_url: str, df, table_name: str, columns: List[str]) -> in
     buf.seek(0)
 
     try:
-        engine = create_engine(engine_url)
+        engine = (
+            engine_or_url
+            if isinstance(engine_or_url, Engine)
+            else create_engine(engine_or_url)
+        )
         # Use raw connection for COPY
         with engine.raw_connection() as conn:
             cur = conn.cursor()
