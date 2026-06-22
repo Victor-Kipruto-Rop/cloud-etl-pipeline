@@ -3,11 +3,20 @@
 import logging
 from pathlib import Path
 
+import re
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from dateutil import parser as date_parser
 
 logger = logging.getLogger(__name__)
+
+
+def _get_color_from_palette(palette):
+    try:
+        return sns.color_palette(palette, 1)[0]
+    except Exception:
+        return sns.color_palette("deep", 1)[0]
 
 
 def _save_count_plot(df, column, output_path, title, palette="viridis"):
@@ -15,8 +24,9 @@ def _save_count_plot(df, column, output_path, title, palette="viridis"):
     if counts.empty:
         return None
 
+    color = _get_color_from_palette(palette)
     plt.figure(figsize=(10, 6))
-    sns.barplot(x=counts.values, y=counts.index, palette=palette)
+    sns.barplot(x=counts.values, y=counts.index, color=color)
     plt.title(title)
     plt.xlabel("Count")
     plt.ylabel(column.replace("_", " ").title())
@@ -48,6 +58,67 @@ def _save_scatter_plot(df, x, y, output_path, title, hue=None, sample=1000):
             bbox_to_anchor=(1.05, 1),
             loc="upper left",
         )
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    logger.info(f"Saved dashboard chart: {output_path}")
+    return output_path
+
+
+def _save_average_price_by_state(df, output_path, title):
+    if df.empty or "state" not in df.columns or "sellingprice" not in df.columns:
+        return None
+
+    avg_prices = df.groupby("state")["sellingprice"].mean().sort_values(ascending=False)
+    plt.figure(figsize=(12, 7))
+    color = _get_color_from_palette("coolwarm")
+    sns.barplot(x=avg_prices.values, y=avg_prices.index, color=color)
+    plt.title(title)
+    plt.xlabel("Average Selling Price")
+    plt.ylabel("State")
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    logger.info(f"Saved dashboard chart: {output_path}")
+    return output_path
+
+
+def _save_price_distribution_by_condition(df, output_path, title):
+    if df.empty or "condition" not in df.columns:
+        return None
+
+    plt.figure(figsize=(12, 7))
+    sns.histplot(
+        df,
+        x="sellingprice",
+        hue="condition",
+        palette="viridis",
+        multiple="stack",
+        bins=30,
+    )
+    plt.title(title)
+    plt.xlabel("Selling Price")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.savefig(output_path)
+    plt.close()
+    logger.info(f"Saved dashboard chart: {output_path}")
+    return output_path
+
+
+def _save_top_dealers_by_total_sales(df, output_path, title):
+    if df.empty or "seller" not in df.columns or "sellingprice" not in df.columns:
+        return None
+
+    dealer_sales = (
+        df.groupby("seller")["sellingprice"].sum().sort_values(ascending=False).head(10)
+    )
+    plt.figure(figsize=(12, 8))
+    color = _get_color_from_palette("magma")
+    sns.barplot(x=dealer_sales.values, y=dealer_sales.index, color=color)
+    plt.title(title)
+    plt.xlabel("Total Sales Value")
+    plt.ylabel("Seller")
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
@@ -124,29 +195,39 @@ def generate_dashboard(processed_dir: Path, output_dir: Path = Path("visualizati
         raise FileNotFoundError(f"No processed CSV files found in: {processed_dir}")
 
     df = None
+
+    def _normalize_date_value(value):
+        if pd.isna(value):
+            return pd.NaT
+        if isinstance(value, str):
+            cleaned = value.strip()
+            cleaned = re.sub(r"\s*\(.*\)$", "", cleaned)
+            try:
+                return pd.to_datetime(
+                    cleaned, format="%a %b %d %Y %H:%M:%S GMT%z", errors="raise"
+                )
+            except (ValueError, OverflowError):
+                try:
+                    return date_parser.parse(cleaned)
+                except (ValueError, OverflowError):
+                    return pd.NaT
+        return value
+
+    def _read_with_date_parsing(path):
+        sample_cols = pd.read_csv(path, nrows=0, low_memory=False).columns.tolist()
+        date_cols = [col for col in ["saledate", "sale_date"] if col in sample_cols]
+        df_local = pd.read_csv(path, low_memory=False)
+        for col in date_cols:
+            df_local[col] = df_local[col].apply(_normalize_date_value)
+        return df_local
+
     for csv_file in csv_files:
         if csv_file.name == "car_prices.csv":
-            df = pd.read_csv(
-                csv_file,
-                parse_dates=[
-                    col
-                    for col in ["saledate", "sale_date"]
-                    if col in pd.read_csv(csv_file, nrows=0).columns
-                ],
-                low_memory=False,
-            )
+            df = _read_with_date_parsing(csv_file)
             break
 
     if df is None:
-        df = pd.read_csv(
-            csv_files[0],
-            parse_dates=[
-                col
-                for col in ["saledate", "sale_date"]
-                if col in pd.read_csv(csv_files[0], nrows=0).columns
-            ],
-            low_memory=False,
-        )
+        df = _read_with_date_parsing(csv_files[0])
 
     summary = {
         "processed_rows": int(len(df)),
@@ -186,7 +267,8 @@ def generate_dashboard(processed_dir: Path, output_dir: Path = Path("visualizati
         seller_counts = df["seller"].value_counts().head(10)
         seller_plot = output_dir / "top_sellers.png"
         plt.figure(figsize=(10, 6))
-        sns.barplot(x=seller_counts.values, y=seller_counts.index, palette="magma")
+        color = _get_color_from_palette("magma")
+        sns.barplot(x=seller_counts.values, y=seller_counts.index, color=color)
         plt.title("Top 10 Sellers by Processed Records")
         plt.xlabel("Count")
         plt.ylabel("Seller")
@@ -195,6 +277,26 @@ def generate_dashboard(processed_dir: Path, output_dir: Path = Path("visualizati
         plt.close()
         logger.info(f"Saved dashboard chart: {seller_plot}")
         charts.append(seller_plot)
+
+        total_sales_plot = output_dir / "top_10_dealers_by_sales.png"
+        total_sales_chart = _save_top_dealers_by_total_sales(
+            df, total_sales_plot, "Top 10 Dealers by Total Sales"
+        )
+        if total_sales_chart is not None:
+            charts.append(total_sales_chart)
+
+    charts.append(
+        _save_average_price_by_state(
+            df, output_dir / "car_prices_by_state.png", "Average Selling Price by State"
+        )
+    )
+    charts.append(
+        _save_price_distribution_by_condition(
+            df,
+            output_dir / "sales_condition_distribution.png",
+            "Selling Price Distribution by Condition",
+        )
+    )
 
     dashboard_path = _build_dashboard_html(output_dir, charts, summary)
     return {

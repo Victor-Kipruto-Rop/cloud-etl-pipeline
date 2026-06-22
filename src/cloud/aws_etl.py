@@ -17,7 +17,9 @@ from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s:%(name)s:%(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s:%(name)s:%(message)s"
+)
 
 
 def _get_env_bool(name: str, default: str = "false") -> bool:
@@ -74,13 +76,17 @@ def run_aws_etl() -> bool:
             df = extract_csv(csv_file)
             required_columns = parse_required_columns(os.getenv("REQUIRED_COLUMNS"))
             validate_df(df, required_columns=required_columns)
-            df_transformed = transform(df, normalize_cols=True, handle_missing="drop_all")
+            df_transformed = transform(
+                df, normalize_cols=True, handle_missing="drop_all"
+            )
 
             output_path = processed_dir / f"{csv_file.stem}.parquet"
             df_transformed.to_parquet(output_path, index=False, compression="snappy")
             logger.info(f"Wrote processed Parquet to {output_path}")
 
-            upload_file(csv_file, bucket, f"{raw_prefix}/{csv_file.name}", region_name=region)
+            upload_file(
+                csv_file, bucket, f"{raw_prefix}/{csv_file.name}", region_name=region
+            )
             upload_dataframe_as_parquet(
                 df_transformed,
                 bucket,
@@ -90,7 +96,9 @@ def run_aws_etl() -> bool:
 
             if redshift_enabled:
                 if not iam_role_arn:
-                    raise ValueError("REDSHIFT_IAM_ROLE_ARN must be set to COPY into Redshift")
+                    raise ValueError(
+                        "REDSHIFT_IAM_ROLE_ARN must be set to COPY into Redshift"
+                    )
                 load_dataframe_to_redshift(
                     df_transformed,
                     csv_file.stem,
@@ -105,7 +113,12 @@ def run_aws_etl() -> bool:
             logger.error(f"Failed to process {csv_file.name}: {exc}")
             continue
 
-    if upload_directory(raw_dir, bucket, raw_prefix, pattern="*.csv", region_name=region) == 0:
+    if (
+        upload_directory(
+            raw_dir, bucket, raw_prefix, pattern="*.csv", region_name=region
+        )
+        == 0
+    ):
         logger.warning("No raw files uploaded to S3")
 
     return True

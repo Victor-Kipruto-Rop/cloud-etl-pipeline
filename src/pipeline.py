@@ -325,7 +325,9 @@ def run():
                         logger.error(f"Error processing {f}: {e}")
         else:
             for csv_file in batch:
-                process_file(csv_file, stats, engine, max_retries=config.pipeline.max_retries)
+                process_file(
+                    csv_file, stats, engine, max_retries=config.pipeline.max_retries
+                )
 
     # Log final statistics
     stats.log_stats()

@@ -59,7 +59,8 @@ class PipelineConfig:
         default_factory=lambda: os.getenv("KAGGLE_DATASET")
     )
     kaggle_force: bool = field(
-        default_factory=lambda: os.getenv("KAGGLE_FORCE_DOWNLOAD", "false").lower() == "true"
+        default_factory=lambda: os.getenv("KAGGLE_FORCE_DOWNLOAD", "false").lower()
+        == "true"
     )
     kaggle_file_pattern: str = field(
         default_factory=lambda: os.getenv("KAGGLE_FILE_PATTERN", "*.csv")

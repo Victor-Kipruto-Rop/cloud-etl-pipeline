@@ -60,9 +60,7 @@ def create_table_if_not_exists(
     diststyle: str = "AUTO",
 ) -> None:
     """Create a Redshift table if it does not exist."""
-    create_sql = sql.SQL(
-        "CREATE TABLE IF NOT EXISTS {}.{} ({} ) DISTSTYLE {}"
-    ).format(
+    create_sql = sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({} ) DISTSTYLE {}").format(
         sql.Identifier(schema),
         sql.Identifier(table_name),
         sql.SQL(dataframe_to_redshift_schema(df)),

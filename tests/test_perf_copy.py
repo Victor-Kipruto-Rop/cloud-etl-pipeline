@@ -27,14 +27,17 @@ def test_copy_loader_perf():
 
     # prefer testcontainers when available for reproducible ephemeral Postgres
     if HAS_TESTCONTAINERS:
+        from urllib.parse import urlparse
+
         with PostgresContainer("postgres:15") as pg:
             db_url = pg.get_connection_url()
             db = DatabaseManager()
-            db.user = pg.USER
-            db.password = pg.PASSWORD
-            db.host = pg.get_container_host_ip()
-            db.port = pg.get_exposed_port(pg.port_to_expose)
-            db.database = pg.DB
+            parsed = urlparse(db_url)
+            db.user = parsed.username
+            db.password = parsed.password
+            db.host = parsed.hostname
+            db.port = parsed.port
+            db.database = parsed.path.lstrip("/")
             db.engine = None
             try:
                 db.connect()
