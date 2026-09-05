@@ -45,6 +45,13 @@ def _require_api_key(func):
     def wrapper(*a, **kw):
         api_key = os.getenv("ADMIN_API_KEY")
         if not api_key:
+            env = os.getenv("APP_ENV", "development").lower()
+            if env not in ("dev", "development", "test"):
+                logger.warning(
+                    "ADMIN_API_KEY is not set; API key-protected endpoints are "
+                    "effectively unauthenticated outside dev/test (env=%s).",
+                    env,
+                )
             # no API key configured — allow in dev
             return func(*a, **kw)
 
