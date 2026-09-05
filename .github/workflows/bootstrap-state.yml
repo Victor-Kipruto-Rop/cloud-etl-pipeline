@@ -1,0 +1,36 @@
+name: 'Bootstrap Terraform State'
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment dev|staging|prod'
+        required: true
+      bucket_name:
+        description: 'S3 bucket name to create'
+        required: true
+      dynamodb_table_name:
+        description: 'DynamoDB table name to create'
+        required: true
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Run bootstrap
+        run: |
+          cd terraform/bootstrap-runner
+          terraform init
+          terraform apply -auto-approve -var "region=us-east-1" -var "bucket_name=${{ github.event.inputs.bucket_name }}" -var "dynamodb_table_name=${{ github.event.inputs.dynamodb_table_name }}" -var "tags={project=\"cloud-etl-pipeline\",environment=\"${{ github.event.inputs.environment }}\"}"
