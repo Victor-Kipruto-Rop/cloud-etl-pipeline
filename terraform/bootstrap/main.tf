@@ -11,21 +11,30 @@ provider "aws" {
 
 resource "aws_s3_bucket" "tfstate" {
   bucket = var.bucket_name
+  tags   = var.tags
+}
+
+resource "aws_s3_bucket_acl" "tfstate_acl" {
+  bucket = aws_s3_bucket.tfstate.id
   acl    = "private"
+}
 
-  versioning {
-    enabled = true
+resource "aws_s3_bucket_versioning" "tfstate_versioning" {
+  bucket = aws_s3_bucket.tfstate.id
+
+  versioning_configuration {
+    status = "Enabled"
   }
+}
 
-  server_side_encryption_configuration {
-    rule {
-      apply_server_side_encryption_by_default {
-        sse_algorithm = "AES256"
-      }
+resource "aws_s3_bucket_server_side_encryption_configuration" "tfstate_encryption" {
+  bucket = aws_s3_bucket.tfstate.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
     }
   }
-
-  tags = var.tags
 }
 
 resource "aws_s3_bucket_public_access_block" "tfstate_block" {
@@ -48,12 +57,4 @@ resource "aws_dynamodb_table" "tf_locks" {
   }
 
   tags = var.tags
-}
-
-output "bucket_name" {
-  value = aws_s3_bucket.tfstate.bucket
-}
-
-output "dynamodb_table_name" {
-  value = aws_dynamodb_table.tf_locks.name
 }
