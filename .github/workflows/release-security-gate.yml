@@ -47,7 +47,7 @@ jobs:
     needs: provenance-and-sbom
     steps:
       - name: Scan container image for CVEs
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ inputs.image_tag }}
           format: 'table'
