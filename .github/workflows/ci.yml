@@ -72,20 +72,20 @@ jobs:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: etl_db
           PYTHONPATH: .
-          run: |
-            set -o pipefail
-            mkdir -p test_artifacts
-            # run primary unit tests, save junit xml and a full log
-            pytest -q tests/test_validation.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py --junitxml=test_artifacts/pytest-results.xml 2>&1 | tee test_artifacts/pytest.log; exit ${PIPESTATUS[0]}
-            # run perf test but do not fail the job on perf failures
-            pytest tests/test_perf_copy.py -q || true
+        run: |
+          set -o pipefail
+          mkdir -p test_artifacts
+          # run primary unit tests, save junit xml and a full log
+          pytest -q tests/test_validation.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py --junitxml=test_artifacts/pytest-results.xml 2>&1 | tee test_artifacts/pytest.log; exit ${PIPESTATUS[0]}
+          # run perf test but do not fail the job on perf failures
+          pytest tests/test_perf_copy.py -q || true
 
-        - name: Upload test artifacts
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: test-artifacts
-            path: test_artifacts
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-artifacts
+          path: test_artifacts
 
       - name: Smoke test application health
         env:
