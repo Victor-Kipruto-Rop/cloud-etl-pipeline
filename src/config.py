@@ -8,32 +8,66 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+from src.secrets import SecretManager
+
 logger = logging.getLogger(__name__)
+
+_secret_manager = SecretManager()
 
 # Load environment variables
 load_dotenv()
+
+
+def _read_env(name: str, default: Optional[str] = None) -> Optional[str]:
+    """Read environment variable values while ignoring blank strings."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    value = value.strip()
+    return value if value else default
+
+
+def _read_int_env(name: str, default: int, minimum: int = 1, maximum: int = 65535) -> int:
+    """Safely read integer env values and enforce a valid port/range."""
+    raw_value = _read_env(name, str(default))
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(maximum, value))
 
 
 @dataclass
 class DatabaseConfig:
     """Database configuration settings."""
 
-    host: str = field(default_factory=lambda: os.getenv("POSTGRES_HOST", "localhost"))
-    port: int = field(default_factory=lambda: int(os.getenv("POSTGRES_PORT", 5432)))
-    user: str = field(default_factory=lambda: os.getenv("POSTGRES_USER", "postgres"))
-    password: str = field(
-        default_factory=lambda: os.getenv("POSTGRES_PASSWORD", "postgres")
+    host: str = field(
+        default_factory=lambda: _secret_manager.get_secret("POSTGRES_HOST", default="localhost") or "localhost"
     )
-    database: str = field(default_factory=lambda: os.getenv("POSTGRES_DB", "etl_db"))
+    port: int = field(default_factory=lambda: _read_int_env("POSTGRES_PORT", 5432))
+    user: str = field(
+        default_factory=lambda: _secret_manager.get_secret("POSTGRES_USER", default="postgres") or "postgres"
+    )
+    password: str = field(
+        default_factory=lambda: _secret_manager.get_secret("POSTGRES_PASSWORD", default="postgres") or "postgres"
+    )
+    database: str = field(
+        default_factory=lambda: _secret_manager.get_secret("POSTGRES_DB", default="etl_db") or "etl_db"
+    )
 
     def get_connection_string(self) -> str:
         """Get SQLAlchemy connection string."""
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+        return (
+            f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
+        )
 
     def validate(self) -> bool:
         """Validate configuration."""
         if not all([self.host, self.user, self.password, self.database]):
             logger.error("Missing required database configuration")
+            return False
+        if not 1 <= self.port <= 65535:
+            logger.error("Database port is out of range")
             return False
         return True
 
@@ -43,30 +77,29 @@ class PipelineConfig:
     """Pipeline configuration settings."""
 
     raw_data_dir: Path = field(
-        default_factory=lambda: Path(os.getenv("RAW_DATA_DIR", "data/raw"))
+        default_factory=lambda: Path(_read_env("RAW_DATA_DIR", "data/raw") or "data/raw")
     )
     processed_data_dir: Path = field(
-        default_factory=lambda: Path(os.getenv("PROCESSED_DATA_DIR", "data/processed"))
+        default_factory=lambda: Path(
+            _read_env("PROCESSED_DATA_DIR", "data/processed") or "data/processed"
+        )
     )
-    log_dir: Path = field(default_factory=lambda: Path(os.getenv("LOG_DIR", "logs")))
-    chunk_size: int = field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", 10000)))
-    max_retries: int = field(default_factory=lambda: int(os.getenv("MAX_RETRIES", 3)))
-    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
+    log_dir: Path = field(default_factory=lambda: Path(_read_env("LOG_DIR", "logs") or "logs"))
+    chunk_size: int = field(default_factory=lambda: _read_int_env("CHUNK_SIZE", 10000, minimum=1))
+    max_retries: int = field(default_factory=lambda: _read_int_env("MAX_RETRIES", 3, minimum=1))
+    log_level: str = field(default_factory=lambda: (_read_env("LOG_LEVEL", "INFO") or "INFO").upper())
     kaggle_download: bool = field(
-        default_factory=lambda: os.getenv("KAGGLE_DOWNLOAD", "false").lower() == "true"
+        default_factory=lambda: (_read_env("KAGGLE_DOWNLOAD", "false") or "false").lower() == "true"
     )
-    kaggle_dataset: Optional[str] = field(
-        default_factory=lambda: os.getenv("KAGGLE_DATASET")
-    )
+    kaggle_dataset: Optional[str] = field(default_factory=lambda: _read_env("KAGGLE_DATASET"))
     kaggle_force: bool = field(
-        default_factory=lambda: os.getenv("KAGGLE_FORCE_DOWNLOAD", "false").lower()
-        == "true"
+        default_factory=lambda: (_read_env("KAGGLE_FORCE_DOWNLOAD", "false") or "false").lower() == "true"
     )
     kaggle_file_pattern: str = field(
-        default_factory=lambda: os.getenv("KAGGLE_FILE_PATTERN", "*.csv")
+        default_factory=lambda: _read_env("KAGGLE_FILE_PATTERN", "*.csv") or "*.csv"
     )
     kaggle_quiet: bool = field(
-        default_factory=lambda: os.getenv("KAGGLE_QUIET", "true").lower() == "true"
+        default_factory=lambda: (_read_env("KAGGLE_QUIET", "true") or "true").lower() == "true"
     )
 
     def validate(self) -> bool:

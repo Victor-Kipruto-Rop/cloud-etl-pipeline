@@ -47,3 +47,46 @@ Troubleshooting
 
 Security
 - Do NOT commit real Slack webhooks, SMTP passwords, or other secrets. Use environment variables or a secret manager in CI/CD.
+
+Production hardening
+- Separate Grafana/Prometheus/Alertmanager configuration by environment to avoid dev alert noise in production pages.
+- Route production alerts to on-call responders and use severity labels with explicit escalation rules.
+- Validate dashboard queries against real target names before promoting to production.
+- Treat alert suppression windows as an operational process with owners and expiry dates.
+- Ensure health and smoke checks back the deployment promotion workflow before approving production releases.
+
+Grafana dashboard import and recommendations
+
+- Purpose: import `grafana-dashboard-import.json` into Grafana to visualize ETL SLOs, freshness, and latency.
+
+Quick import (UI):
+1. Grafana → Dashboards → Manage → Import
+2. Upload `monitoring/grafana-dashboard-import.json`
+3. Select Prometheus datasource used by this project and import.
+
+Quick import (API):
+```bash
+export GRAFANA_URL="https://grafana.example.com"
+export GRAFANA_API_KEY="<api-key>"
+curl -s -H "Content-Type: application/json" -H "Authorization: Bearer $GRAFANA_API_KEY" \
+	-X POST "$GRAFANA_URL/api/dashboards/db" \
+	--data-binary @monitoring/grafana-dashboard-import.json
+```
+
+Recommended panel settings:
+- Dashboard refresh: `30s` or `1m` for near-real-time freshness and latency.
+- Time picker: set to `Last 30 days` when evaluating SLO Compliance panels.
+- Template variables: add a `source` variable (Prometheus label) to filter `Freshness by Source`.
+
+Prometheus metrics expected:
+- `etl_files_processed_total`
+- `etl_files_failed_total`
+- `etl_current_in_progress`
+- `etl_rows_loaded_total`
+- `etl_rows_extracted_total`
+- `etl_last_successful_run_timestamp_seconds`
+- `etl_pipeline_latency_seconds_bucket`
+
+Notes:
+- The JSON is import-ready; panel IDs and grid positions are set for a 24-column layout.
+- Adjust thresholds in Grafana if your SLO target differs from 99%.

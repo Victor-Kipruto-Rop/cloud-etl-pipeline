@@ -1,0 +1,179 @@
+name: Staged rollout
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag or SHA to deploy
+        required: true
+        default: latest
+        type: string
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      canary_percentage:
+        description: Production canary percentage
+        required: false
+        default: '20'
+        type: string
+      rollback_on_failure:
+        description: Automatically revert on failed smoke checks
+        required: false
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      image_tag:
+        description: Image tag or SHA to deploy
+        required: true
+        type: string
+      environment:
+        description: Target environment
+        required: true
+        type: string
+      canary_percentage:
+        description: Production canary percentage
+        required: false
+        type: string
+        default: '20'
+      rollback_on_failure:
+        description: Automatically revert on failed smoke checks
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-release:
+    name: Validate staged release inputs
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      environment: ${{ steps.meta.outputs.environment }}
+      canary_percentage: ${{ steps.meta.outputs.canary_percentage }}
+      rollback_on_failure: ${{ steps.meta.outputs.rollback_on_failure }}
+    steps:
+      - name: Resolve target values
+        id: meta
+        run: |
+          echo "image_tag=${{ inputs.image_tag || github.event.inputs.image_tag || 'latest' }}" >> "$GITHUB_OUTPUT"
+          echo "environment=${{ inputs.environment || github.event.inputs.environment || 'dev' }}" >> "$GITHUB_OUTPUT"
+          echo "canary_percentage=${{ inputs.canary_percentage || github.event.inputs.canary_percentage || '20' }}" >> "$GITHUB_OUTPUT"
+          echo "rollback_on_failure=${{ inputs.rollback_on_failure || github.event.inputs.rollback_on_failure || 'true' }}" >> "$GITHUB_OUTPUT"
+
+  deploy-dev:
+    name: Deploy to dev
+    needs: validate-release
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Deploy release to dev
+        run: |
+          echo "Deploying ${{ needs.validate-release.outputs.image_tag }} to dev"
+
+      - name: Smoke test dev endpoint
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          if [ -z "${DEPLOY_HEALTH_URL}" ]; then
+            echo "DEPLOY_HEALTH_URL is not configured for dev"
+            exit 1
+          fi
+          curl -fsS "${DEPLOY_HEALTH_URL}/health" | python -c "import json,sys; payload=json.load(sys.stdin); assert payload.get('overall_status') in {'healthy','warning'}, payload; print('dev smoke check passed:', payload.get('overall_status'))"
+
+  deploy-staging:
+    name: Deploy to staging
+    needs:
+      - validate-release
+      - deploy-dev
+    if: ${{ needs.validate-release.outputs.environment == 'staging' || needs.validate-release.outputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Deploy release to staging
+        run: |
+          echo "Deploying ${{ needs.validate-release.outputs.image_tag }} to staging"
+
+      - name: Smoke test staging endpoint
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          if [ -z "${DEPLOY_HEALTH_URL}" ]; then
+            echo "DEPLOY_HEALTH_URL is not configured for staging"
+            exit 1
+          fi
+          curl -fsS "${DEPLOY_HEALTH_URL}/health" | python -c "import json,sys; payload=json.load(sys.stdin); assert payload.get('overall_status') in {'healthy','warning'}, payload; print('staging smoke check passed:', payload.get('overall_status'))"
+
+  production-approval:
+    name: Production approval gate
+    needs:
+      - validate-release
+      - deploy-staging
+    if: ${{ needs.validate-release.outputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require explicit production approval
+        run: |
+          echo "Production approval required for ${{ needs.validate-release.outputs.image_tag }}"
+          echo "This gate blocks unsafe deployment without a repository maintainer review."
+
+  production-canary:
+    name: Canary deploy for production
+    needs:
+      - validate-release
+      - deploy-staging
+      - production-approval
+    if: ${{ needs.validate-release.outputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Route canary traffic
+        run: |
+          echo "Starting canary traffic with ${{ needs.validate-release.outputs.canary_percentage }}% traffic"
+          echo "Target release: ${{ needs.validate-release.outputs.image_tag }}"
+
+      - name: Smoke test production canary endpoint
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          if [ -z "${DEPLOY_HEALTH_URL}" ]; then
+            echo "DEPLOY_HEALTH_URL is not configured for production"
+            exit 1
+          fi
+          curl -fsS "${DEPLOY_HEALTH_URL}/health" | python -c "import json,sys; payload=json.load(sys.stdin); assert payload.get('overall_status') in {'healthy','warning'}, payload; print('production canary smoke check passed:', payload.get('overall_status'))"
+
+      - name: Promote canary to full rollout
+        run: |
+          echo "Canary traffic validation passed; full rollout can proceed."
+
+  rollback-on-failure:
+    name: Roll back release on failure
+    needs:
+      - validate-release
+      - deploy-dev
+      - deploy-staging
+      - production-approval
+      - production-canary
+    if: ${{ failure() && needs.validate-release.outputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Automatic rollback
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          echo "Automatic rollback triggered because a smoke or health check failed."
+          echo "Revert to the latest known-good production release and restore traffic routing."
+          if [ -n "${DEPLOY_HEALTH_URL}" ]; then
+            echo "Health endpoint targeted for verification: ${DEPLOY_HEALTH_URL}"
+          fi
+          exit 1

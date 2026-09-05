@@ -12,60 +12,78 @@ on:
     paths:
       - 'terraform/**'
   workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment target'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
 
 env:
   TF_VERSION: '1.5.0'
   AWS_REGION: 'us-east-1'
 
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-${{ github.event.inputs.environment || 'dev' }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   terraform-plan:
     name: Terraform Plan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
+      id-token: write
       pull-requests: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-      
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      
+
       - name: Terraform Format Check
         id: fmt
         run: terraform fmt -check -recursive
         working-directory: ./terraform
         continue-on-error: true
-      
+
       - name: Terraform Init
         id: init
         run: terraform init
         working-directory: ./terraform
-      
+
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
         working-directory: ./terraform
-      
+
       - name: Terraform Plan
         id: plan
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
         run: |
-          terraform plan -no-color -input=false \
-            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}" \
-            -out=tfplan
+          terraform plan -no-color -input=false -out=tfplan
         working-directory: ./terraform
         continue-on-error: true
-      
+
       - name: Comment PR with Plan
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
@@ -78,81 +96,77 @@ jobs:
             #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
             #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
             #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            
+
             <details><summary>Show Plan</summary>
-            
+
             \`\`\`terraform
             ${process.env.PLAN}
             \`\`\`
-            
+
             </details>
-            
+
             *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: output
             })
-      
+
       - name: Terraform Plan Status
         if: steps.plan.outcome == 'failure'
         run: exit 1
-  
+
   terraform-apply:
     name: Terraform Apply
     needs: terraform-plan
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     environment: production
-    
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-      
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION || env.AWS_REGION }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
-      
+
       - name: Terraform Init
         run: terraform init
         working-directory: ./terraform
-      
+
       - name: Terraform Apply
-        run: |
-          terraform apply -auto-approve -input=false \
-            -var="aws_account_id=${{ secrets.AWS_ACCOUNT_ID }}"
+        env:
+          TF_VAR_aws_account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+        run: terraform apply -auto-approve -input=false
         working-directory: ./terraform
-      
-      - name: Terraform Output
-        id: output
-        run: terraform output -json
-        working-directory: ./terraform
-      
+
       - name: Create deployment summary
         run: |
           echo "## Terraform Deployment Complete! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Infrastructure Deployed" >> $GITHUB_STEP_SUMMARY
-          echo "- VPC and Networking ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Networking ✅" >> $GITHUB_STEP_SUMMARY
           echo "- S3 Buckets ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- AWS Glue (Jobs & Crawlers) ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Amazon Redshift ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- MWAA (Airflow) ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Lambda Functions ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- Step Functions ✅" >> $GITHUB_STEP_SUMMARY
-          echo "- CloudWatch Monitoring ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- AWS Glue Jobs ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Redshift ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Airflow ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitoring ✅" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "1. Upload Glue scripts to S3" >> $GITHUB_STEP_SUMMARY
-          echo "2. Upload Airflow DAGs to S3" >> $GITHUB_STEP_SUMMARY
-          echo "3. Run initial data ingestion" >> $GITHUB_STEP_SUMMARY
+          echo "1. Upload Glue scripts" >> $GITHUB_STEP_SUMMARY
+          echo "2. Upload DAGs" >> $GITHUB_STEP_SUMMARY
+          echo "3. Run smoke checks" >> $GITHUB_STEP_SUMMARY

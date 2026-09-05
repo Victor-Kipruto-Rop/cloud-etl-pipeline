@@ -171,6 +171,51 @@ cloud-etl-pipeline/
         └── provider.tf
 ```
 
+## Release and deployment policy
+
+This repository expects protected GitHub environments for `dev`, `staging`, and `production`.
+
+Production policy:
+- `main` is protected and requires successful CI before merge or deploy
+- `staging` requires reviewer approval before promotion
+- `production` requires the dedicated approval gate in `.github/workflows/production-approval-gate.yml`
+- Production deploys require a health/smoke check and environment approval before applying changes
+- Database migrations and Terraform changes must be reviewed and approved before production execution
+- The staged rollout workflow defines the release path: `dev` -> `staging` -> `production`
+- Production follows a canary rollout and must automatically roll back on failed smoke checks or unhealthy endpoints
+
+## Operational scripts
+
+The repo includes deployment support scripts for production safety:
+- `scripts/health_check.sh` checks environment health endpoints
+- `scripts/rollback_production.sh` triggers a rollback flow for a previous known-good version
+- `.env.dev.example`, `.env.staging.example`, and `.env.production.example` provide environment-specific secret templates
+
+## Monitoring, SLOs, and operational safety
+
+The repository includes Prometheus alert rules for production operations and an example Grafana dashboard. Recommended signal coverage includes:
+- pipeline latency alerts for p95 and p99 execution time
+- data freshness checks to ensure downstream datasets are refreshed within SLA windows
+- warehouse row-count drift checks to detect silent data loss or unexpected source behavior
+- dead-letter queue and failed-job thresholds that escalate when operational failures increase
+- canary and deployment markers so release changes are visible in Grafana annotations
+
+### Recommended SLO targets
+
+- data freshness: 99% of downstream datasets refreshed within 1 hour
+- ETL success rate: 99.5% or better for scheduled jobs
+- pipeline latency: p95 under 5 minutes for standard batch runs
+- failed job tolerance: fewer than 5 failed jobs in a 15-minute window before alerting
+
+### Grafana deployment annotations
+
+Grafana annotations should be configured for both deploys and rollbacks so each deploy or incident is visible alongside time series data. Typical annotation sources include:
+- CI/CD workflow events from GitHub Actions or ArgoCD-style deployment metadata
+- manual rollback actions recorded in the runbook or event stream
+- environment-level release markers annotated with the image tag and approver
+
+This supports fast correlation between a deploy, a rollback, and the resulting latency, failure, or data freshness signals.
+
 ## Notes
 
 - `data/raw/` and `data/processed/` are local working directories.

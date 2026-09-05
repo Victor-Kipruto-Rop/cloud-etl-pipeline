@@ -12,6 +12,7 @@ from flask_cors import CORS
 
 from src.config import get_config
 from src.health import HealthChecker
+from src.orchestration import PipelineOrchestrator
 from src.pipeline import run as run_pipeline
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,8 @@ logger = logging.getLogger(__name__)
 # Flask app setup
 app = Flask(__name__)
 CORS(app)
+
+pipeline_orchestrator = PipelineOrchestrator()
 
 # Scheduler
 _scheduler_running = False
@@ -40,9 +43,9 @@ def trigger_pipeline():
     try:
         logger.info("Pipeline run triggered via API")
 
-        # Optional: get parameters from request
         data = request.get_json() or {}
         dry_run = data.get("dry_run", False)
+        async_run = data.get("async_run", False)
 
         if dry_run:
             return (
@@ -56,9 +59,21 @@ def trigger_pipeline():
                 200,
             )
 
-        # Run pipeline
-        result = run_pipeline()
+        if async_run:
+            job_id = pipeline_orchestrator.start_job("pipeline-run", run_pipeline)
+            return (
+                jsonify(
+                    {
+                        "status": "success",
+                        "message": "Pipeline execution started asynchronously",
+                        "job_id": job_id,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                ),
+                200,
+            )
 
+        result = run_pipeline()
         return (
             jsonify(
                 {
@@ -83,6 +98,21 @@ def trigger_pipeline():
             ),
             500,
         )
+
+
+@app.route("/api/v1/pipeline/jobs", methods=["GET"])
+def list_jobs():
+    """List orchestrated pipeline jobs."""
+    return jsonify({"jobs": pipeline_orchestrator.list_jobs()}), 200
+
+
+@app.route("/api/v1/pipeline/jobs/<job_id>", methods=["GET"])
+def get_job(job_id: str):
+    """Get the status of a specific orchestrated job."""
+    try:
+        return jsonify(pipeline_orchestrator.get_job_status(job_id)), 200
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
 
 
 @app.route("/api/v1/pipeline/status", methods=["GET"])

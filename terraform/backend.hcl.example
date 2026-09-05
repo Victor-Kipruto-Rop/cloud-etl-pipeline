@@ -1,0 +1,6 @@
+bucket         = "terraform-state-<AWS_ACCOUNT_ID>"
+key            = "cloud-etl-pipeline/terraform.tfstate"
+region         = "us-east-1"
+encrypt        = true
+dynamodb_table = "terraform-state-lock"
+workspace_key_prefix = "env"
