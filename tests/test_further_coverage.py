@@ -129,6 +129,38 @@ class TestMigrationsCoverage(unittest.TestCase):
     def test_get_applied_migrations_empty(self):
         self.assertEqual(self.manager._get_applied_migrations(), set())
 
+    def test_migration_dry_run_and_approval(self):
+        self.manager.create_migration(
+            "create_dry_run",
+            "CREATE TABLE dry_run_table (id INTEGER);",
+            "DROP TABLE dry_run_table;",
+        )
+
+        plan = self.manager.apply_migrations(
+            dry_run=True,
+            environment="production",
+            require_approval=True,
+        )
+
+        self.assertTrue(plan["dry_run"])
+        self.assertTrue(plan["requires_approval"])
+        self.assertEqual(plan["environment"], "production")
+        self.assertIn("dry_run_table", plan["rollback_plan"]["down_sql"])
+        self.assertEqual(self.manager._get_applied_migrations(), set())
+
+    def test_production_migration_requires_approval(self):
+        self.manager.create_migration(
+            "create_production_guard",
+            "CREATE TABLE production_guard_table (id INTEGER);",
+            "DROP TABLE production_guard_table;",
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "approval"):
+            self.manager.apply_migrations(
+                environment="production",
+                require_approval=False,
+            )
+
 
 class TestPipelineCoverage(unittest.TestCase):
     def setUp(self):

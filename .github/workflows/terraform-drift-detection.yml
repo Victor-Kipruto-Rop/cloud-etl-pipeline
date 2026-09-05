@@ -1,0 +1,44 @@
+name: 'Terraform: Drift Detection & State Checks'
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # daily at 02:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+
+      - name: Make scripts executable
+        run: |
+          chmod +x terraform/init_workspace.sh
+          chmod +x terraform/drift_check.sh
+
+      - name: Run drift checks for all environments
+        run: |
+          for env in dev staging prod; do
+            echo "=== Checking $env ==="
+            set -o pipefail
+            ./terraform/drift_check.sh "$env" || DRIFT_RESULT=$?
+            if [ "${DRIFT_RESULT:-0}" -eq 2 ]; then
+              echo "Drift detected in $env"
+              exit 1
+            fi
+            unset DRIFT_RESULT
+          done

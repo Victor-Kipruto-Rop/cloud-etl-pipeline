@@ -1,0 +1,129 @@
+name: Release promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment target
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+      image_tag:
+        description: Container image tag to promote
+        required: true
+        type: string
+        default: latest
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event.inputs.environment || 'staging' }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-sign:
+    name: Build and sign image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image with provenance
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ inputs.image_tag || github.sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Sign image with cosign
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign --yes ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ github.sha }}
+
+  security-gate:
+    name: Verify release security gate
+    needs: build-and-sign
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Verify provenance and SBOM
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ inputs.image_tag || github.sha }}
+        run: |
+          echo "Verifying image provenance and SBOM for ${IMAGE}"
+          cosign verify-attestation \
+            --certificate-identity-regexp 'https://github.com/.+' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}"
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ inputs.image_tag || github.sha }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+          exit-code: '1'
+
+  promote:
+    name: Promote to ${{ inputs.environment || 'staging' }}
+    needs: security-gate
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'staging' }}
+
+    steps:
+      - name: Validate release artifact
+        run: |
+          test -n "${{ inputs.image_tag || github.sha }}"
+          echo "Promoting image tag ${{ inputs.image_tag || github.sha }} into ${{ inputs.environment || 'staging' }}"
+
+      - name: Smoke test deploy target
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          if [ -z "${DEPLOY_HEALTH_URL}" ]; then
+            echo "DEPLOY_HEALTH_URL is not configured for this environment"
+            exit 1
+          fi
+          curl -fsS "${DEPLOY_HEALTH_URL}/health" | python -c "import json,sys; payload=json.load(sys.stdin); assert payload.get('overall_status') in {'healthy','warning'}, payload; print('smoke check passed:', payload.get('overall_status'))"
+
+      - name: Deployment summary
+        run: |
+          echo "## Release promotion complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "Promoted image to ${{ inputs.environment || 'staging' }}" >> $GITHUB_STEP_SUMMARY
+          echo "Tag: ${{ inputs.image_tag || github.sha }}" >> $GITHUB_STEP_SUMMARY

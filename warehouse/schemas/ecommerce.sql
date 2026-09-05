@@ -1,3 +1,4 @@
+-- Active: 1769658960732@@127.0.0.1@5432
 -- E-commerce Data Warehouse - Star Schema
 -- Brazilian E-commerce Dataset (Olist)
 -- Drop and recreate tables with proper distribution and sort keys

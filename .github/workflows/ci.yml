@@ -6,15 +6,24 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    - cron: '0 3 * * 0' # weekly on Sunday 03:00 UTC
+    - cron: '0 3 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       PYTHONPATH: .
       NODE_OPTIONS: --no-deprecation
-    
+      APP_ENV: ci
+
     services:
       postgres:
         image: postgres:15
@@ -31,73 +40,110 @@ jobs:
           - 5432:5432
 
     steps:
-    - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-    
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest pytest-cov flake8 black isort
-    
-    - name: Lint with flake8
-      run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    
-    - name: Format check with black
-      run: black --check src tests
-    
-    - name: Import sort check with isort
-      run: isort --check-only src tests
-    
-    - name: Run tests with pytest
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_USER: postgres
-        POSTGRES_PASSWORD: postgres
-        POSTGRES_DB: etl_db
-        PYTHONPATH: .
-      run: |
-        pytest tests/test_validation.py -q
-        # By default skip performance tests; they can be executed manually via workflow_dispatch
-        pytest tests/test_perf_copy.py -q || true
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        files: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8 black isort
+
+      - name: Lint with flake8
+        run: |
+          flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Format check with black
+        run: black --check src tests
+
+      - name: Import sort check with isort
+        run: isort --check-only src tests
+
+      - name: Run tests with pytest
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: etl_db
+          PYTHONPATH: .
+        run: |
+          pytest -q tests/test_validation.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py
+          pytest tests/test_perf_copy.py -q || true
+
+      - name: Smoke test application health
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: etl_db
+          PYTHONPATH: .
+        run: |
+          python -m src.api > /tmp/etl-api.log 2>&1 &
+          APP_PID=$!
+          trap 'kill $APP_PID || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:5000/health >/tmp/health.json 2>/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Health endpoint failed to respond"
+              cat /tmp/etl-api.log || true
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:5000/health >/tmp/health.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('/tmp/health.json')
+          data = json.loads(p.read_text())
+          assert data.get('overall_status') in {'healthy', 'warning'}, data
+          print('health check ok:', data.get('overall_status'))
+          PY
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
 
   docker:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
     steps:
-    - uses: actions/checkout@v5
-    
-    - name: Create env file for Docker config validation
-      run: |
-        cp .env.example .env 2>/dev/null || true
+      - uses: actions/checkout@v4
 
-    - name: Build Docker image
-      run: docker build -t cloud-etl-pipeline:latest .
+      - name: Create env file for Docker config validation
+        run: |
+          cp .env.example .env 2>/dev/null || true
 
-    - name: Test Docker image
-      run: |
-        docker compose config
+      - name: Build Docker image
+        run: docker build -t cloud-etl-pipeline:latest .
+
+      - name: Test Docker image
+        run: |
+          docker compose config
 
   perf:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event_name == 'schedule'
+    timeout-minutes: 20
+    permissions:
+      contents: read
     services:
       postgres:
         image: postgres:15
@@ -112,28 +158,28 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
-        cache: 'pip'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pytest
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
 
-    - name: Run perf test
-      env:
-        POSTGRES_HOST: localhost
-        POSTGRES_USER: postgres
-        POSTGRES_PASSWORD: postgres
-        POSTGRES_DB: etl_db
-        RUN_PERF: '1'
-        PERF_ROWS: '20000'
-        PYTHONPATH: .
-      run: |
-        pytest tests/test_perf_copy.py -q -s
+      - name: Run perf test
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: etl_db
+          RUN_PERF: '1'
+          PERF_ROWS: '20000'
+          PYTHONPATH: .
+        run: |
+          pytest tests/test_perf_copy.py -q -s

@@ -12,7 +12,11 @@ from pathlib import Path
 import time
 from botocore.exceptions import ClientError
 
+from src.secrets import SecretManager
+
 logger = logging.getLogger(__name__)
+
+_secret_manager = SecretManager()
 
 
 class KaggleIngestor:
@@ -67,23 +71,31 @@ class KaggleIngestor:
         Falls back to environment variables if Secrets Manager unavailable.
         """
         try:
-            # Try to get credentials from Secrets Manager
             secret_name = os.getenv('KAGGLE_SECRET_NAME', 'etl/kaggle/api-credentials')
-            response = self.secrets_client.get_secret_value(SecretId=secret_name)
-            
-            if 'SecretString' in response:
-                secret = json.loads(response['SecretString'])
-                os.environ['KAGGLE_USERNAME'] = secret['username']
-                os.environ['KAGGLE_KEY'] = secret['key']
-                logger.info("Kaggle credentials loaded from Secrets Manager")
-            else:
-                raise ValueError("Secret not in expected format")
-                
+            secret = _secret_manager.get_secret('KAGGLE_USERNAME', secret_id=secret_name)
+            if isinstance(secret, dict):
+                username = secret.get('username') or secret.get('KAGGLE_USERNAME')
+                api_key = secret.get('key') or secret.get('KAGGLE_KEY')
+                if username and api_key:
+                    os.environ['KAGGLE_USERNAME'] = username
+                    os.environ['KAGGLE_KEY'] = api_key
+                    logger.info("Kaggle credentials loaded from secret manager")
+                    return
+
+            username = _secret_manager.get_secret('KAGGLE_USERNAME', default=None)
+            api_key = _secret_manager.get_secret('KAGGLE_KEY', default=None)
+            if username and api_key:
+                os.environ['KAGGLE_USERNAME'] = str(username)
+                os.environ['KAGGLE_KEY'] = str(api_key)
+                logger.info("Kaggle credentials loaded from configured secrets")
+                return
+
+            raise ValueError("Kaggle secret values are not configured")
+
         except Exception as e:
             logger.warning(f"Could not load credentials from Secrets Manager: {e}")
             logger.info("Falling back to environment variables or kaggle.json")
-            
-            # Validate environment variables exist
+
             if not os.getenv('KAGGLE_USERNAME') or not os.getenv('KAGGLE_KEY'):
                 logger.warning("KAGGLE_USERNAME and KAGGLE_KEY not set in environment")
     
