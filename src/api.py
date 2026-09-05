@@ -91,6 +91,7 @@ def info():
 
 
 @app.route("/api/v1/maintenance", methods=["GET", "POST"])
+@_require_api_key
 def maintenance():
     """Get or set maintenance mode.
 
