@@ -141,7 +141,13 @@ class PipelineOrchestrator:
             future = job.get("future")
             cancel_event = job.get("cancel_event")
             if future is None:
-                # Nothing to cancel
+                # Job is queued but not yet submitted to the executor.
+                # Set the cancel event so it is honored as soon as the job starts.
+                if cancel_event is not None:
+                    cancel_event.set()
+                    job["status"] = "cancelled"
+                    job["updated_at"] = datetime.now(timezone.utc).isoformat()
+                    job["finished_at"] = job["updated_at"]
                 return False
 
             # First, if the job is running, signal cooperative cancel
