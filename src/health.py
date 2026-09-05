@@ -109,7 +109,17 @@ class HealthChecker:
             "overall_status": overall_status,
             "timestamp": self.timestamp.isoformat(),
             "checks": self.checks,
+            "deploy": self._get_deploy_info(),
         }
+
+    def _get_deploy_info(self) -> Dict[str, Any]:
+        try:
+            from src.deploy_info import get_deploy_info
+
+            return get_deploy_info()
+        except Exception:
+            logger.debug("Failed to read deploy info for health output")
+            return {"version": "unknown"}
 
     def get_status_report(self) -> str:
         """Get a formatted status report."""

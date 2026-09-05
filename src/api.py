@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -14,6 +15,7 @@ from src.config import get_config
 from src.health import HealthChecker
 from src.orchestration import PipelineOrchestrator
 from src.pipeline import run as run_pipeline
+from src.deploy_info import get_deploy_info
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,26 @@ app = Flask(__name__)
 CORS(app)
 
 pipeline_orchestrator = PipelineOrchestrator()
+
+# Maintenance mode persisted file
+_MAINTENANCE_PATH = Path("data/maintenance.json")
+
+
+def _read_maintenance() -> dict:
+    try:
+        if _MAINTENANCE_PATH.exists():
+            return json.loads(_MAINTENANCE_PATH.read_text())
+    except Exception:
+        logger.exception("Failed to read maintenance file")
+    return {"enabled": False}
+
+
+def _write_maintenance(payload: dict) -> None:
+    try:
+        _MAINTENANCE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _MAINTENANCE_PATH.write_text(json.dumps(payload))
+    except Exception:
+        logger.exception("Failed to write maintenance file")
 
 # Scheduler
 _scheduler_running = False
@@ -37,9 +59,59 @@ def health_check():
     return jsonify(results), status_code
 
 
+@app.route("/api/v1/info", methods=["GET"])
+def info():
+    """Return service deploy and build metadata."""
+    info = get_deploy_info()
+    return jsonify(info), 200
+
+
+@app.route("/api/v1/maintenance", methods=["GET", "POST"])
+def maintenance():
+    """Get or set maintenance mode.
+
+    POST body: {"enabled": true|false, "reason": "...", "by": "username"}
+    """
+    if request.method == "GET":
+        return jsonify(_read_maintenance()), 200
+
+    # POST - update
+    try:
+        payload = request.get_json() or {}
+        enabled = bool(payload.get("enabled", False))
+        reason = payload.get("reason")
+        by = payload.get("by")
+        record = {
+            "enabled": enabled,
+            "reason": reason,
+            "by": by,
+            "timestamp": datetime.now().isoformat(),
+        }
+        _write_maintenance(record)
+        return jsonify({"status": "ok", "maintenance": record}), 200
+    except Exception as e:
+        logger.error(f"Failed to set maintenance: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/v1/pipeline/run", methods=["POST"])
 def trigger_pipeline():
     """Trigger pipeline execution."""
+    # Prevent changes during maintenance mode unless explicitly overridden
+    m = _read_maintenance()
+    if m.get("enabled"):
+        data = request.get_json() or {}
+        if not data.get("override_maintenance"):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Service in maintenance mode",
+                        "maintenance": m,
+                    }
+                ),
+                503,
+            )
     try:
         logger.info("Pipeline run triggered via API")
 
@@ -124,6 +196,7 @@ def pipeline_status():
         "status": "running",
         "log_file": str(config.pipeline.log_dir / "pipeline.log"),
         "timestamp": datetime.now().isoformat(),
+        "deploy": get_deploy_info(),
     }
 
     return jsonify(status), 200
