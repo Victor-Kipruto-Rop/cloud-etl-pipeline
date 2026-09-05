@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import json
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -45,6 +46,15 @@ def _write_maintenance(payload: dict) -> None:
     except Exception:
         logger.exception("Failed to write maintenance file")
 
+
+def _require_admin_token():
+    token = request.headers.get("X-Admin-Token")
+    expected = os.environ.get("ADMIN_TOKEN")
+    if not expected or token != expected:
+        return jsonify({"status": "error", "message": "Forbidden"}), 403
+    return None
+
+
 # Scheduler
 _scheduler_running = False
 
@@ -74,6 +84,10 @@ def maintenance():
     """
     if request.method == "GET":
         return jsonify(_read_maintenance()), 200
+
+    auth_error = _require_admin_token()
+    if auth_error:
+        return auth_error
 
     # POST - update
     try:
