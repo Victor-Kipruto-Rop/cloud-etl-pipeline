@@ -255,6 +255,7 @@ def get_job(job_id: str):
 
 
 @app.route("/api/v1/pipeline/jobs/<job_id>/result", methods=["GET"])
+@_require_api_key
 def get_job_result(job_id: str):
     try:
         result = pipeline_orchestrator.get_job_result(job_id)
