@@ -115,9 +115,11 @@ def trigger_pipeline():
     m = _read_maintenance()
     if m.get("enabled"):
         data = request.get_json() or {}
-        admin_token = request.headers.get("X-Admin-Token")
-        expected_admin_token = os.environ.get("ADMIN_TOKEN")
-        if not (admin_token == expected_admin_token and data.get("override_maintenance")):
+        if data.get("override_maintenance"):
+            auth_error = _require_admin_token()
+            if auth_error:
+                return auth_error
+        else:
             return (
                 jsonify(
                     {
