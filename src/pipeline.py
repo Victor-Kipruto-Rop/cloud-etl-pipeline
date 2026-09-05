@@ -3,6 +3,7 @@ import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Event
 from datetime import datetime
 from pathlib import Path
 from threading import Lock
@@ -121,6 +122,7 @@ def process_file(
     stats: PipelineStats,
     engine=None,
     max_retries: int = 3,
+    cancel_event: Event | None = None,
 ) -> bool:
     """
     Process a single CSV file through the ETL pipeline with retry logic.
@@ -138,6 +140,10 @@ def process_file(
     logger.info(f"{'='*60}")
 
     for attempt in range(1, max_retries + 1):
+        # cooperative cancellation check
+        if cancel_event is not None and cancel_event.is_set():
+            logger.info(f"Cancellation requested. Aborting processing of {csv_file}")
+            return False
         try:
             # Extract
             logger.info(f"[Attempt {attempt}/{max_retries}] Extracting...")
@@ -237,11 +243,15 @@ def process_file(
 
 
 def run_pipeline():
-    """Canonical ETL entrypoint used across the project."""
+    """Canonical ETL entrypoint used across the project.
+
+    Backwards-compatible wrapper that accepts an optional `cancel_event` kwarg
+    when called by the orchestrator. Example: `run_pipeline(cancel_event=evt)`.
+    """
     return run()
 
 
-def run():
+def run(cancel_event: Event | None = None):
     """Execute the ETL pipeline."""
     config = get_config()
     configure_logging(config.pipeline.log_dir)
@@ -321,6 +331,10 @@ def run():
         batch = csv_files[i : i + batch_size]
         logger.info(f"Processing batch {i//batch_size + 1}: {len(batch)} file(s)")
 
+        # check cooperative cancellation at batch boundary
+        if cancel_event is not None and cancel_event.is_set():
+            logger.info("Cancellation requested before processing batch; aborting")
+            break
         if parallel_workers > 1:
             with ThreadPoolExecutor(max_workers=parallel_workers) as exc:
                 futures = {
@@ -330,6 +344,7 @@ def run():
                         stats,
                         engine,
                         max_retries=config.pipeline.max_retries,
+                        cancel_event=cancel_event,
                     ): f
                     for f in batch
                 }

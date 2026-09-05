@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict
@@ -14,6 +15,9 @@ from src.config import get_config
 from src.health import HealthChecker
 from src.orchestration import PipelineOrchestrator
 from src.pipeline import run as run_pipeline
+from src.deploy_info import get_deploy_info
+import os
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,48 @@ app = Flask(__name__)
 CORS(app)
 
 pipeline_orchestrator = PipelineOrchestrator()
+
+# Maintenance mode persisted file
+_MAINTENANCE_PATH = Path("data/maintenance.json")
+
+
+def _read_maintenance() -> dict:
+    try:
+        if _MAINTENANCE_PATH.exists():
+            return json.loads(_MAINTENANCE_PATH.read_text())
+    except Exception:
+        logger.exception("Failed to read maintenance file")
+    return {"enabled": False}
+
+
+def _require_api_key(func):
+    @wraps(func)
+    def wrapper(*a, **kw):
+        api_key = os.getenv("ADMIN_API_KEY")
+        if not api_key:
+            # no API key configured — allow in dev
+            return func(*a, **kw)
+
+        # Check Authorization header or X-Api-Key
+        header = request.headers.get("Authorization") or request.headers.get("X-Api-Key")
+        if header and header.startswith("Bearer "):
+            token = header.split(" ", 1)[1]
+        else:
+            token = header
+
+        if token != api_key:
+            return jsonify({"status": "unauthorized"}), 401
+        return func(*a, **kw)
+
+    return wrapper
+
+
+def _write_maintenance(payload: dict) -> None:
+    try:
+        _MAINTENANCE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _MAINTENANCE_PATH.write_text(json.dumps(payload))
+    except Exception:
+        logger.exception("Failed to write maintenance file")
 
 # Scheduler
 _scheduler_running = False
@@ -37,9 +83,59 @@ def health_check():
     return jsonify(results), status_code
 
 
+@app.route("/api/v1/info", methods=["GET"])
+def info():
+    """Return service deploy and build metadata."""
+    info = get_deploy_info()
+    return jsonify(info), 200
+
+
+@app.route("/api/v1/maintenance", methods=["GET", "POST"])
+def maintenance():
+    """Get or set maintenance mode.
+
+    POST body: {"enabled": true|false, "reason": "...", "by": "username"}
+    """
+    if request.method == "GET":
+        return jsonify(_read_maintenance()), 200
+
+    # POST - update
+    try:
+        payload = request.get_json() or {}
+        enabled = bool(payload.get("enabled", False))
+        reason = payload.get("reason")
+        by = payload.get("by")
+        record = {
+            "enabled": enabled,
+            "reason": reason,
+            "by": by,
+            "timestamp": datetime.now().isoformat(),
+        }
+        _write_maintenance(record)
+        return jsonify({"status": "ok", "maintenance": record}), 200
+    except Exception as e:
+        logger.error(f"Failed to set maintenance: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/v1/pipeline/run", methods=["POST"])
 def trigger_pipeline():
     """Trigger pipeline execution."""
+    # Prevent changes during maintenance mode unless explicitly overridden
+    m = _read_maintenance()
+    if m.get("enabled"):
+        data = request.get_json() or {}
+        if not data.get("override_maintenance"):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Service in maintenance mode",
+                        "maintenance": m,
+                    }
+                ),
+                503,
+            )
     try:
         logger.info("Pipeline run triggered via API")
 
@@ -106,6 +202,33 @@ def list_jobs():
     return jsonify({"jobs": pipeline_orchestrator.list_jobs()}), 200
 
 
+@app.route("/api/v1/pipeline/jobs", methods=["POST"])
+@_require_api_key
+def submit_job():
+    """Submit an asynchronous job.
+
+    Body parameters:
+      - name: logical job name (defaults to 'pipeline-run')
+      - params: optional dict passed to the job function
+      - timeout: optional timeout seconds
+    """
+    try:
+        payload = request.get_json() or {}
+        name = payload.get("name", "pipeline-run")
+        params = payload.get("params", {})
+        timeout = payload.get("timeout")
+
+        # Only allow known jobs for safety
+        if name != "pipeline-run":
+            return jsonify({"status": "error", "message": "Unknown job type"}), 400
+
+        job_id = pipeline_orchestrator.start_job(name, run_pipeline, **params, timeout=timeout)
+        return jsonify({"status": "queued", "job_id": job_id}), 202
+    except Exception as e:
+        logger.exception("Failed to submit job")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/v1/pipeline/jobs/<job_id>", methods=["GET"])
 def get_job(job_id: str):
     """Get the status of a specific orchestrated job."""
@@ -113,6 +236,34 @@ def get_job(job_id: str):
         return jsonify(pipeline_orchestrator.get_job_status(job_id)), 200
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route("/api/v1/pipeline/jobs/<job_id>/result", methods=["GET"])
+def get_job_result(job_id: str):
+    try:
+        result = pipeline_orchestrator.get_job_result(job_id)
+        if result is None:
+            return jsonify({"status": "running", "job_id": job_id}), 202
+        return jsonify({"status": "completed", "job_id": job_id, "result": result}), 200
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except RuntimeError as exc:
+        return jsonify({"status": "failed", "job_id": job_id, "message": str(exc)}), 500
+
+
+@app.route("/api/v1/pipeline/jobs/<job_id>/cancel", methods=["POST"])
+@_require_api_key
+def cancel_job(job_id: str):
+    try:
+        cancelled = pipeline_orchestrator.cancel_job(job_id)
+        if cancelled:
+            return jsonify({"status": "cancelled", "job_id": job_id}), 200
+        return jsonify({"status": "not_cancelled", "job_id": job_id}), 409
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as e:
+        logger.exception("Failed to cancel job")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/v1/pipeline/status", methods=["GET"])
@@ -124,6 +275,7 @@ def pipeline_status():
         "status": "running",
         "log_file": str(config.pipeline.log_dir / "pipeline.log"),
         "timestamp": datetime.now().isoformat(),
+        "deploy": get_deploy_info(),
     }
 
     return jsonify(status), 200
