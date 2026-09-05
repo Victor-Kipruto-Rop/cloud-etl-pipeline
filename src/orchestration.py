@@ -120,6 +120,28 @@ class PipelineOrchestrator:
         """Shut down the executor."""
         self._executor.shutdown(wait=wait)
 
+    def cancel_job(self, job_id: str) -> bool:
+        """Attempt to cancel a queued/running job.
+
+        Returns True if the job was cancelled, False otherwise.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                raise KeyError(f"Unknown job id: {job_id}")
+
+            future = job.get("future")
+            if future is None:
+                # Nothing to cancel
+                return False
+
+            cancelled = future.cancel()
+            if cancelled:
+                job["status"] = "cancelled"
+                job["updated_at"] = datetime.now(timezone.utc).isoformat()
+                job["finished_at"] = job["updated_at"]
+            return cancelled
+
 
 def create_orchestrator(max_workers: int = 4) -> PipelineOrchestrator:
     """Factory helper for production orchestration."""

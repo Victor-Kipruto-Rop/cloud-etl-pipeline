@@ -178,6 +178,32 @@ def list_jobs():
     return jsonify({"jobs": pipeline_orchestrator.list_jobs()}), 200
 
 
+@app.route("/api/v1/pipeline/jobs", methods=["POST"])
+def submit_job():
+    """Submit an asynchronous job.
+
+    Body parameters:
+      - name: logical job name (defaults to 'pipeline-run')
+      - params: optional dict passed to the job function
+      - timeout: optional timeout seconds
+    """
+    try:
+        payload = request.get_json() or {}
+        name = payload.get("name", "pipeline-run")
+        params = payload.get("params", {})
+        timeout = payload.get("timeout")
+
+        # Only allow known jobs for safety
+        if name != "pipeline-run":
+            return jsonify({"status": "error", "message": "Unknown job type"}), 400
+
+        job_id = pipeline_orchestrator.start_job(name, run_pipeline, **params, timeout=timeout)
+        return jsonify({"status": "queued", "job_id": job_id}), 202
+    except Exception as e:
+        logger.exception("Failed to submit job")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 @app.route("/api/v1/pipeline/jobs/<job_id>", methods=["GET"])
 def get_job(job_id: str):
     """Get the status of a specific orchestrated job."""
@@ -185,6 +211,33 @@ def get_job(job_id: str):
         return jsonify(pipeline_orchestrator.get_job_status(job_id)), 200
     except KeyError as exc:
         return jsonify({"status": "error", "message": str(exc)}), 404
+
+
+@app.route("/api/v1/pipeline/jobs/<job_id>/result", methods=["GET"])
+def get_job_result(job_id: str):
+    try:
+        result = pipeline_orchestrator.get_job_result(job_id)
+        if result is None:
+            return jsonify({"status": "running", "job_id": job_id}), 202
+        return jsonify({"status": "completed", "job_id": job_id, "result": result}), 200
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except RuntimeError as exc:
+        return jsonify({"status": "failed", "job_id": job_id, "message": str(exc)}), 500
+
+
+@app.route("/api/v1/pipeline/jobs/<job_id>/cancel", methods=["POST"])
+def cancel_job(job_id: str):
+    try:
+        cancelled = pipeline_orchestrator.cancel_job(job_id)
+        if cancelled:
+            return jsonify({"status": "cancelled", "job_id": job_id}), 200
+        return jsonify({"status": "not_cancelled", "job_id": job_id}), 409
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 404
+    except Exception as e:
+        logger.exception("Failed to cancel job")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/api/v1/pipeline/status", methods=["GET"])
