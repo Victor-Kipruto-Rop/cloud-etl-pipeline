@@ -1,0 +1,16 @@
+{
+  "id": null,
+  "uid": null,
+  "title": "Deploy Metadata",
+  "panels": [
+    {
+      "type": "text",
+      "title": "Release & Deploy Metadata",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "options": {
+        "content": "## Release information\n\nThis panel displays the last release metadata reported by the service.\n\n- Version: ${service.version}  \n- Commit: ${service.commit}  \n- Last successful deploy: ${service.last_successful_deploy}  \n- Last failed deploy: ${service.last_failed_deploy}\n\nNote: populate variables via the API endpoint `/api/v1/info` in your dashboard using a simple frontend or datasource plugin.",
+        "mode": "markdown"
+      }
+    }
+  ]
+}
