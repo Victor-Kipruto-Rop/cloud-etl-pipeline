@@ -50,13 +50,19 @@ class PipelineOrchestrator:
                 "future": None,
             }
 
+        # cooperative cancellation event passed to the job
+        cancel_event = threading.Event()
+
         def _run_job() -> Any:
             with self._lock:
                 self._jobs[job_id]["status"] = "running"
                 self._jobs[job_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
 
             try:
-                result = func(*args, **kwargs)
+                # inject cancel_event into kwargs so long-running jobs can honor cancellation
+                kwargs_with_event = dict(kwargs)
+                kwargs_with_event.setdefault("cancel_event", cancel_event)
+                result = func(*args, **kwargs_with_event)
                 with self._lock:
                     self._jobs[job_id]["status"] = "completed"
                     self._jobs[job_id]["result"] = result
@@ -74,6 +80,8 @@ class PipelineOrchestrator:
         future = self._executor.submit(_run_job)
         with self._lock:
             self._jobs[job_id]["future"] = future
+            # store the cancel event for external cancellation
+            self._jobs[job_id]["cancel_event"] = cancel_event
 
         return job_id
 
@@ -131,9 +139,14 @@ class PipelineOrchestrator:
                 raise KeyError(f"Unknown job id: {job_id}")
 
             future = job.get("future")
+            cancel_event = job.get("cancel_event")
             if future is None:
                 # Nothing to cancel
                 return False
+
+            # First, if the job is running, signal cooperative cancel
+            if cancel_event is not None and not future.done():
+                cancel_event.set()
 
             cancelled = future.cancel()
             if cancelled:

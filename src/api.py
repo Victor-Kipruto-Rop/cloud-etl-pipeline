@@ -16,6 +16,8 @@ from src.health import HealthChecker
 from src.orchestration import PipelineOrchestrator
 from src.pipeline import run as run_pipeline
 from src.deploy_info import get_deploy_info
+import os
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,28 @@ def _read_maintenance() -> dict:
     except Exception:
         logger.exception("Failed to read maintenance file")
     return {"enabled": False}
+
+
+def _require_api_key(func):
+    @wraps(func)
+    def wrapper(*a, **kw):
+        api_key = os.getenv("ADMIN_API_KEY")
+        if not api_key:
+            # no API key configured — allow in dev
+            return func(*a, **kw)
+
+        # Check Authorization header or X-Api-Key
+        header = request.headers.get("Authorization") or request.headers.get("X-Api-Key")
+        if header and header.startswith("Bearer "):
+            token = header.split(" ", 1)[1]
+        else:
+            token = header
+
+        if token != api_key:
+            return jsonify({"status": "unauthorized"}), 401
+        return func(*a, **kw)
+
+    return wrapper
 
 
 def _write_maintenance(payload: dict) -> None:
@@ -179,6 +203,7 @@ def list_jobs():
 
 
 @app.route("/api/v1/pipeline/jobs", methods=["POST"])
+@_require_api_key
 def submit_job():
     """Submit an asynchronous job.
 
@@ -227,6 +252,7 @@ def get_job_result(job_id: str):
 
 
 @app.route("/api/v1/pipeline/jobs/<job_id>/cancel", methods=["POST"])
+@_require_api_key
 def cancel_job(job_id: str):
     try:
         cancelled = pipeline_orchestrator.cancel_job(job_id)
