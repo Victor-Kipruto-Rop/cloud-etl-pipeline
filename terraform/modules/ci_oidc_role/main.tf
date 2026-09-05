@@ -98,22 +98,31 @@ resource "aws_iam_role_policy" "tf_bootstrap_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      {
-        Effect = "Allow",
-        Action = [
-          "s3:CreateBucket",
-          "s3:PutBucketVersioning",
-          "s3:PutBucketPolicy",
-          "s3:PutBucketAcl",
-          "s3:PutEncryptionConfiguration",
-          "s3:PutBucketPublicAccessBlock",
-          "s3:GetBucketLocation",
-          "s3:ListBucket"
-        ],
-        Resource = [
-          "arn:aws:s3:::*"
-        ]
-      },
+      merge(
+        {
+          Effect = "Allow"
+          Action = [
+            "s3:CreateBucket",
+            "s3:PutBucketVersioning",
+            "s3:PutBucketPolicy",
+            "s3:PutBucketAcl",
+            "s3:PutEncryptionConfiguration",
+            "s3:PutBucketPublicAccessBlock",
+            "s3:GetBucketLocation",
+            "s3:ListBucket"
+          ]
+          Resource = [
+            "arn:aws:s3:::*"
+          ]
+        },
+        var.bootstrap_bucket_name == "" ? {} : {
+          Condition = {
+            StringLike = {
+              "aws:RequestBucket" = [var.bootstrap_bucket_name]
+            }
+          }
+        }
+      ),
       {
         Effect = "Allow",
         Action = [

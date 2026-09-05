@@ -38,3 +38,11 @@ variable "kms_key_arn" {
   type        = string
   default     = ""
 }
+
+variable "bootstrap_bucket_name" {
+  description = "Name of the S3 bucket created by the bootstrap role (used to scope S3 permissions)"
+  type        = string
+  default     = ""
+}
+
+
