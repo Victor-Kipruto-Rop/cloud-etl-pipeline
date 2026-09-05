@@ -123,16 +123,25 @@ resource "aws_iam_role_policy" "tf_bootstrap_policy" {
           }
         }
       ),
-      {
-        Effect = "Allow",
-        Action = [
-          "dynamodb:CreateTable",
-          "dynamodb:DescribeTable",
-          "dynamodb:UpdateTable",
-          "dynamodb:TagResource"
-        ],
-        Resource = ["*"]
-      }
+      merge(
+        {
+          Effect = "Allow",
+          Action = [
+            "dynamodb:CreateTable",
+            "dynamodb:DescribeTable",
+            "dynamodb:UpdateTable",
+            "dynamodb:TagResource"
+          ]
+          Resource = ["*"]
+        },
+        var.bootstrap_dynamodb_table == "" ? {} : {
+          Condition = {
+            StringLike = {
+              "dynamodb:TableName" = [var.bootstrap_dynamodb_table]
+            }
+          }
+        }
+      )
     ]
   })
 }

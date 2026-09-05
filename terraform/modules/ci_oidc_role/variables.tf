@@ -45,4 +45,10 @@ variable "bootstrap_bucket_name" {
   default     = ""
 }
 
+variable "bootstrap_dynamodb_table" {
+  description = "Name of the DynamoDB lock table created by the bootstrap role (used to scope DynamoDB permissions)"
+  type        = string
+  default     = ""
+}</oldString>
+
 
