@@ -357,7 +357,11 @@ def run(cancel_event: Event | None = None):
         else:
             for csv_file in batch:
                 process_file(
-                    csv_file, stats, engine, max_retries=config.pipeline.max_retries
+                    csv_file,
+                    stats,
+                    engine,
+                    max_retries=config.pipeline.max_retries,
+                    cancel_event=cancel_event,
                 )
 
     # Log final statistics
