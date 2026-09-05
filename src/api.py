@@ -223,6 +223,21 @@ def submit_job():
         if name != "pipeline-run":
             return jsonify({"status": "error", "message": "Unknown job type"}), 400
 
+        # Respect maintenance mode unless caller opts in
+        data = request.get_json() or {}
+        m = _read_maintenance()
+        if m.get("enabled") and not data.get("override_maintenance"):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Service in maintenance mode",
+                        "maintenance": m,
+                    }
+                ),
+                503,
+            )
+
         job_id = pipeline_orchestrator.start_job(name, run_pipeline, **params, timeout=timeout)
         return jsonify({"status": "queued", "job_id": job_id}), 202
     except Exception as e:
