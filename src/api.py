@@ -45,6 +45,13 @@ def _require_api_key(func):
     def wrapper(*a, **kw):
         api_key = os.getenv("ADMIN_API_KEY")
         if not api_key:
+            env = os.getenv("APP_ENV", "development").lower()
+            if env not in ("dev", "development", "test"):
+                logger.warning(
+                    "ADMIN_API_KEY is not set; API key-protected endpoints are "
+                    "effectively unauthenticated outside dev/test (env=%s).",
+                    env,
+                )
             # no API key configured — allow in dev
             return func(*a, **kw)
 
@@ -91,6 +98,7 @@ def info():
 
 
 @app.route("/api/v1/maintenance", methods=["GET", "POST"])
+@_require_api_key
 def maintenance():
     """Get or set maintenance mode.
 
@@ -222,6 +230,21 @@ def submit_job():
         if name != "pipeline-run":
             return jsonify({"status": "error", "message": "Unknown job type"}), 400
 
+        # Respect maintenance mode unless caller opts in
+        data = request.get_json() or {}
+        m = _read_maintenance()
+        if m.get("enabled") and not data.get("override_maintenance"):
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Service in maintenance mode",
+                        "maintenance": m,
+                    }
+                ),
+                503,
+            )
+
         job_id = pipeline_orchestrator.start_job(name, run_pipeline, **params, timeout=timeout)
         return jsonify({"status": "queued", "job_id": job_id}), 202
     except Exception as e:
@@ -239,6 +262,7 @@ def get_job(job_id: str):
 
 
 @app.route("/api/v1/pipeline/jobs/<job_id>/result", methods=["GET"])
+@_require_api_key
 def get_job_result(job_id: str):
     try:
         result = pipeline_orchestrator.get_job_result(job_id)
