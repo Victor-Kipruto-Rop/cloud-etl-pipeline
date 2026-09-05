@@ -27,3 +27,66 @@ groups:
         annotations:
           summary: "ETL pipeline not processing files"
           description: "No files processed in the last hour"
+
+      - alert: ETLPipelineLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(etl_pipeline_duration_seconds_bucket[5m])) by (le)) > 300
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pipeline latency exceeds the 5-minute target"
+          description: "ETL pipeline p95 latency is above 300 seconds ({{ $value | humanizeDuration }}). Investigate queue backpressure, downstream dependencies, or resource saturation."
+
+      - alert: ETLPipelineLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(etl_pipeline_duration_seconds_bucket[5m])) by (le)) > 600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pipeline latency exceeds the critical SLA threshold"
+          description: "ETL pipeline p99 latency is above 600 seconds ({{ $value | humanizeDuration }}). This risks missing the freshness SLA."
+
+      - alert: ETLDataFreshnessLag
+        expr: etl_data_freshness_seconds > 3600
+        for: 20m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Data freshness SLA breached"
+          description: "The last successful pipeline run is older than 1 hour ({{ $value }} seconds). Check upstream ingestion and downstream loads."
+
+      - alert: ETLWarehouseRowCountDrift
+        expr: abs(etl_warehouse_row_count - etl_warehouse_expected_row_count) / clamp_min(etl_warehouse_expected_row_count, 1) > 0.2
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Warehouse row-count drift exceeds tolerance"
+          description: "Warehouse row counts differ from the expected baseline by more than 20% (current: {{ $value }}). Validate source completeness and transformation logic."
+
+      - alert: ETLDeadLetterQueueDepth
+        expr: etl_dead_letter_messages_total > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead-letter queue has messages"
+          description: "The ETL dead-letter queue is non-empty. Review failed jobs, retries, and downstream dependencies."
+
+      - alert: ETLFailedJobsThreshold
+        expr: increase(etl_job_failures_total[15m]) > 5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Failed job count crossed the production threshold"
+          description: "More than 5 ETL jobs failed in the last 15 minutes ({{ $value }}). This indicates an operational incident or dependency outage."
+
+      - alert: ETLSLOErrorBudgetBurn
+        expr: sum(rate(etl_job_failures_total[1h])) / clamp_min(sum(rate(etl_jobs_total[1h])), 1) > 0.02
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ETL service is consuming the SLO error budget"
+          description: "The pipeline is above the allowable failure ratio for the SLO policy. Reduce failures or escalate to incident response."

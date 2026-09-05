@@ -49,6 +49,17 @@ RAW_DIR = Path("data/raw")
 PROCESSED_DIR = Path("data/processed")
 
 
+class PipelineOrchestrator:
+    """Single orchestration path for ETL execution."""
+
+    def __init__(self, config=None):
+        self.config = config or get_config()
+
+    def run(self):
+        """Execute the ETL pipeline through one canonical entry point."""
+        return run()
+
+
 def configure_logging(log_dir: Path) -> None:
     """Configure pipeline logging to the desired directory."""
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -223,6 +234,11 @@ def process_file(
             return False
 
     return False
+
+
+def run_pipeline():
+    """Canonical ETL entrypoint used across the project."""
+    return run()
 
 
 def run():

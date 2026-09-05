@@ -1,0 +1,52 @@
+name: Production approval gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag or commit SHA to approve for production
+        required: true
+        type: string
+      environment:
+        description: Deployment target
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Release tag or commit SHA to approve for production
+        required: true
+        type: string
+      environment:
+        description: Deployment target
+        required: true
+        type: string
+
+jobs:
+  approve-production:
+    name: Production approval requirement
+    if: ${{ inputs.environment == 'production' || github.event.inputs.environment == 'production' }}
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Confirm production readiness
+        run: |
+          echo "Production deployment approval requested for tag ${{ inputs.release_tag || github.event.inputs.release_tag }}"
+          echo "This workflow must be approved by a repository maintainer or production reviewer."
+
+      - name: Validate deployment health endpoint
+        env:
+          DEPLOY_HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL }}
+        run: |
+          if [ -z "${DEPLOY_HEALTH_URL}" ]; then
+            echo "DEPLOY_HEALTH_URL is required for production deployments."
+            exit 1
+          fi
+          curl -fsS "${DEPLOY_HEALTH_URL}/health" | python -c "import json,sys; payload=json.load(sys.stdin); assert payload.get('overall_status') in {'healthy','warning'}, payload; print('production health check passed:', payload.get('overall_status'))"
+
+      - name: Production gate passed
+        run: echo "Production approval gate passed. Release may proceed."
