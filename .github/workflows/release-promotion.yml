@@ -92,7 +92,7 @@ jobs:
             "${IMAGE}"
 
       - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/cloud-etl-pipeline:${{ inputs.image_tag || github.sha }}
           format: 'table'
