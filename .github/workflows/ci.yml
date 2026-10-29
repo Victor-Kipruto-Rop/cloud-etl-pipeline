@@ -73,7 +73,7 @@ jobs:
           POSTGRES_DB: etl_db
           PYTHONPATH: .
         run: |
-          pytest -q tests/test_validation.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py
+          pytest -q tests/test_validation.py tests/test_validation_required_columns.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py
           pytest tests/test_perf_copy.py -q || true
 
       - name: Smoke test application health
