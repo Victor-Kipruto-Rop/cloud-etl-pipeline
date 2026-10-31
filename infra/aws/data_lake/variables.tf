@@ -22,12 +22,20 @@ variable "bronze_expiration_days" {
   description = "Retention period for bronze objects. Set to 0 to retain indefinitely."
   type        = number
   default     = 365
+  validation {
+    condition     = var.bronze_expiration_days >= 0
+    error_message = "bronze_expiration_days must be zero or greater."
+  }
 }
 
 variable "noncurrent_version_expiration_days" {
   description = "Retention for noncurrent object versions."
   type        = number
   default     = 90
+  validation {
+    condition     = var.noncurrent_version_expiration_days >= 1
+    error_message = "noncurrent_version_expiration_days must be at least one."
+  }
 }
 
 variable "tags" {
