@@ -39,11 +39,6 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
         raise ValueError(
             "UPSERT_KEY_COLUMNS is required when DATABASE_URL is set in medallion mode"
         )
-    if os.getenv("POSTGRES_HOST") and not database_url:
-        raise ValueError(
-            "Medallion mode requires DATABASE_URL for transactional idempotent loading"
-        )
-
     if metadata_url.startswith("sqlite:///"):
         sqlite_path = Path(metadata_url.removeprefix("sqlite:///"))
         if str(sqlite_path) != ":memory:":
@@ -81,7 +76,7 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     metadata_store=store,
                     layer_root=layer_root,
                     database_engine=database_engine,
-                    target_table=os.getenv("TARGET_TABLE", source.stem),
+                    target_table=os.getenv("TARGET_TABLE") or source.stem,
                     target_schema=os.getenv("TARGET_SCHEMA") or None,
                     conflict_columns=conflict_columns,
                     file_format=file_format,
