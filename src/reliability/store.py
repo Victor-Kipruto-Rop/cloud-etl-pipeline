@@ -112,7 +112,7 @@ class MetadataStore:
                     source_checksum=source_checksum,
                     rows_read=0,
                     rows_written=0,
-                    metadata_json=self._json(metadata),
+                    metadata_json=self._json(run_metadata),
                 )
             )
         return run_id
@@ -146,6 +146,8 @@ class MetadataStore:
                 raise ValueError(f"Cannot complete run in state {run['status']!r}")
             final_source = source_uri or run["source_uri"]
             final_checksum = source_checksum or run["source_checksum"]
+            run_metadata = json.loads(run["metadata_json"] or "{}")
+            run_metadata.update(dict(metadata or {}))
             conn.execute(
                 update(self.runs)
                 .where(self.runs.c.run_id == run_id)
