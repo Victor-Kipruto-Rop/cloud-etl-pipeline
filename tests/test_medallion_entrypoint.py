@@ -10,6 +10,9 @@ def test_medallion_entrypoint_runs_and_skips_unchanged_source(tmp_path, monkeypa
     metadata_path = tmp_path / "metadata.db"
     monkeypatch.setenv("METADATA_DATABASE_URL", f"sqlite:///{metadata_path}")
     monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("AWS_S3_BUCKET", raising=False)
+    monkeypatch.delenv("DATA_QUALITY_CONTRACT_PATH", raising=False)
+    monkeypatch.delenv("UPSERT_KEY_COLUMNS", raising=False)
     monkeypatch.setenv("MEDALLION_FILE_FORMAT", "csv")
     monkeypatch.setenv("REQUIRED_COLUMNS", "order_id,amount")
 
