@@ -85,6 +85,19 @@ This command downloads the specified Kaggle dataset, processes CSV files, writes
 .venv/bin/python3 -m pytest -q
 ```
 
+## GitLab CI
+
+The project includes a GitLab CI pipeline in `.gitlab-ci.yml` for linting,
+tests with PostgreSQL, container build validation, and standalone data-lake
+Terraform validation. To use it, import or mirror this GitHub repository into
+a GitLab project. GitLab CI starts when a branch is pushed or a merge request
+is opened. Docker-in-Docker jobs require a GitLab runner configured to permit
+privileged Docker services; if your runner does not allow this, disable the
+container job or use a compatible self-managed runner.
+
+See [Local Docker Development](docs/LOCAL_DOCKER.md) for running PostgreSQL,
+the ETL container, and an interactive development container locally.
+
 ## Incremental medallion pipeline
 
 The existing single-stage flow remains the default. To enable the new incremental
