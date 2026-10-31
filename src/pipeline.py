@@ -392,9 +392,6 @@ def run(cancel_event: Event | None = None):
 
     return stats.files_failed == 0
 
-    # Return success if no critical failures
-    return stats.files_failed == 0
-
 
 if __name__ == "__main__":
     try:
