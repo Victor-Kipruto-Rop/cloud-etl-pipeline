@@ -15,18 +15,21 @@ A Python ETL repository that ingests Kaggle datasets, runs local extract/transfo
 - E-commerce analytics SQL in `analytics/ecommerce_queries.sql`
 - Warehouse schema DDL in `warehouse/schemas/*.sql`
 - Monitoring examples in `monitoring/`
-- A pytest-based test suite in `tests/`
+- Declarative data-quality contracts and a pytest-based test suite in `tests/`
+- Atomic CSV / Parquet artifact writes that preserve the last successful output if a write fails
+- Container hardening with a non-root runtime user and a Docker build-context ignore policy
 
 > Note: `terraform/` contains a Terraform root configuration and AWS provider file, but the referenced Terraform module sources are not included in this repository. The supported workflow is local development with optional AWS helper support.
 
-## Status
+## Engineering status
 
-- Local ETL and data ingestion are implemented in Python.
-- AWS S3 upload and optional Redshift helper methods exist, but full multi-service cloud provisioning is not available in this checkout.
-- `dags/` and `k8s/` provide deployment skeletons rather than a complete cloud production stack.
-- `.env` is a local configuration file that should not be committed.
-- Data directories under `data/` are excluded from version control and should be created locally.
-- This repository is best used for local pipeline development, testing, and Kaggle ingestion.
+- The local Python ETL path supports CSV extraction, transformation, validation, PostgreSQL loading, and operational metrics.
+- AWS helpers support S3 artifact upload and optional Redshift COPY integration when correctly configured.
+- CSV and Parquet outputs are published atomically on the local filesystem. A failed write does not replace the previous completed artifact.
+- Docker now runs the ETL process as a non-root user and excludes local datasets, logs, and credentials from the build context.
+- `dags/`, `k8s/`, and parts of `terraform/` are deployment examples or scaffolds. They must be validated and completed in the target AWS account before use.
+- This repository is not certified production-ready. Review [Production Readiness](docs/PRODUCTION_READINESS.md) for the controls and evidence required before a production launch.
+- Never commit `.env`, Kaggle credentials, cloud credentials, or customer datasets.
 
 ## Quick Start
 
@@ -76,6 +79,14 @@ This command downloads the specified Kaggle dataset, processes CSV files, writes
 ```bash
 .venv/bin/python3 -m pytest -q
 ```
+
+## Reliability and operational controls
+
+- Atomic local artifact publication for CSV and Parquet outputs
+- Data-quality contracts for required fields, null thresholds, uniqueness, minimum row counts, and allowed values
+- CI compilation checks and targeted regression tests for output-write failure handling
+- Non-root Docker runtime and build-context exclusions for local data and secrets
+- Explicit production-readiness gates covering idempotency, replay, quarantine, IAM, monitoring, backup restoration, and release approvals
 
 ## Supported workflows
 
@@ -215,6 +226,10 @@ Grafana annotations should be configured for both deploys and rollbacks so each 
 - environment-level release markers annotated with the image tag and approver
 
 This supports fast correlation between a deploy, a rollback, and the resulting latency, failure, or data freshness signals.
+
+## Production readiness
+
+Read [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) before using this project for unattended workloads. The checklist separates implemented repository features from infrastructure and operational controls that still require deployment-specific implementation and evidence.
 
 ## Notes
 
