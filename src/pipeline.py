@@ -189,7 +189,8 @@ def process_file(
                         loaded = load_df_to_postgres(df_transformed, csv_file.stem)
                     stats.incr(rows_loaded=loaded)
                 except LoadError as e:
-                    logger.warning(f"Database load skipped: {e}")
+                    logger.error(f"Required database load failed: {e}")
+                    raise
             else:
                 logger.debug(
                     "POSTGRES_HOST not set and no DATABASE_URL, skipping database load"
