@@ -114,63 +114,114 @@ def execute_dataset(
             raise TypeError("transform must return a pandas DataFrame")
 
         bronze = write_layer(
-            source_dataframe, root=layer_root, layer="bronze", dataset=dataset,
-            run_id=run_id, source_uri=source_uri, source_checksum=source_checksum,
+            source_dataframe,
+            root=layer_root,
+            layer="bronze",
+            dataset=dataset,
+            run_id=run_id,
+            source_uri=source_uri,
+            source_checksum=source_checksum,
             file_format=file_format,
         )
         metadata_store.record_lineage(
-            run_id, dataset, "bronze_published",
-            parent_uri=source_uri, child_uri=bronze["artifact_path"],
-            details={"rows": len(source_dataframe), "sha256": bronze["sha256"]},
+            run_id,
+            dataset,
+            "bronze_published",
+            parent_uri=source_uri,
+            child_uri=bronze["artifact_path"],
+            details={
+                "rows": len(source_dataframe),
+                "sha256": bronze["sha256"],
+            },
         )
         if s3_bucket:
             bronze_uris = _upload_layer(
-                bronze, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+                bronze,
+                bucket=s3_bucket,
+                prefix=s3_prefix,
+                region=aws_region,
             )
             metadata_store.record_lineage(
-                run_id, dataset, "bronze_uploaded",
-                parent_uri=bronze["artifact_path"], child_uri=bronze_uris[0],
+                run_id,
+                dataset,
+                "bronze_uploaded",
+                parent_uri=bronze["artifact_path"],
+                child_uri=bronze_uris[0],
                 details={"manifest_uri": bronze_uris[1]},
             )
 
         silver = write_layer(
-            silver_dataframe, root=layer_root, layer="silver", dataset=dataset,
-            run_id=run_id, source_uri=bronze["artifact_path"],
-            source_checksum=bronze["sha256"], file_format=file_format,
+            silver_dataframe,
+            root=layer_root,
+            layer="silver",
+            dataset=dataset,
+            run_id=run_id,
+            source_uri=bronze["artifact_path"],
+            source_checksum=bronze["sha256"],
+            file_format=file_format,
         )
         metadata_store.record_lineage(
-            run_id, dataset, "silver_published",
-            parent_uri=bronze["artifact_path"], child_uri=silver["artifact_path"],
-            details={"rows": len(silver_dataframe), "sha256": silver["sha256"]},
+            run_id,
+            dataset,
+            "silver_published",
+            parent_uri=bronze["artifact_path"],
+            child_uri=silver["artifact_path"],
+            details={
+                "rows": len(silver_dataframe),
+                "sha256": silver["sha256"],
+            },
         )
         if s3_bucket:
             silver_uris = _upload_layer(
-                silver, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+                silver,
+                bucket=s3_bucket,
+                prefix=s3_prefix,
+                region=aws_region,
             )
             metadata_store.record_lineage(
-                run_id, dataset, "silver_uploaded",
-                parent_uri=silver["artifact_path"], child_uri=silver_uris[0],
+                run_id,
+                dataset,
+                "silver_uploaded",
+                parent_uri=silver["artifact_path"],
+                child_uri=silver_uris[0],
                 details={"manifest_uri": silver_uris[1]},
             )
 
         if gold_dataframe is not None:
             gold = write_layer(
-                gold_dataframe, root=layer_root, layer="gold", dataset=dataset,
-                run_id=run_id, source_uri=silver["artifact_path"],
-                source_checksum=silver["sha256"], file_format=file_format,
+                gold_dataframe,
+                root=layer_root,
+                layer="gold",
+                dataset=dataset,
+                run_id=run_id,
+                source_uri=silver["artifact_path"],
+                source_checksum=silver["sha256"],
+                file_format=file_format,
             )
             metadata_store.record_lineage(
-                run_id, dataset, "gold_published",
-                parent_uri=silver["artifact_path"], child_uri=gold["artifact_path"],
-                details={"rows": len(gold_dataframe), "sha256": gold["sha256"]},
+                run_id,
+                dataset,
+                "gold_published",
+                parent_uri=silver["artifact_path"],
+                child_uri=gold["artifact_path"],
+                details={
+                    "rows": len(gold_dataframe),
+                    "sha256": gold["sha256"],
+                },
             )
             if s3_bucket:
                 gold_uris = _upload_layer(
-                    gold, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+                    gold,
+                    bucket=s3_bucket,
+                    prefix=s3_prefix,
+                    region=aws_region,
                 )
                 metadata_store.record_lineage(
-                    run_id, dataset, "gold_uploaded",
-                    parent_uri=gold["artifact_path"], child_uri=gold_uris[0],
+                    run_id,
+                    dataset,
+                    "gold_uploaded",
+                    parent_uri=gold["artifact_path"],
+                    child_uri=gold_uris[0],
                     details={"manifest_uri": gold_uris[1]},
                 )
 
@@ -182,7 +233,9 @@ def execute_dataset(
                     "database sink is configured"
                 )
             loaded_rows = upsert_dataframe(
-                database_engine, silver_dataframe, table_name=target_table,
+                database_engine,
+                silver_dataframe,
+                table_name=target_table,
                 conflict_columns=conflict_columns,
                 schema=target_schema,
             )
