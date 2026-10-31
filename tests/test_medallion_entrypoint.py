@@ -38,11 +38,10 @@ def test_extraction_failure_is_recorded_and_quarantined(tmp_path, monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("AWS_S3_BUCKET", raising=False)
     monkeypatch.delenv("DATA_QUALITY_CONTRACT_PATH", raising=False)
-    monkeypatch.setattr(
-        entrypoint,
-        "extract_csv",
-        lambda _: (_ for _ in ()).throw(ValueError("invalid CSV source")),
-    )
+    def fail_extract(_):
+        raise ValueError("invalid CSV source")
+
+    monkeypatch.setattr(entrypoint, "extract_csv", fail_extract)
 
     assert run_medallion_files([source], layer_root=tmp_path / "lake") is False
     store = MetadataStore(create_engine(f"sqlite:///{metadata_path}"))
