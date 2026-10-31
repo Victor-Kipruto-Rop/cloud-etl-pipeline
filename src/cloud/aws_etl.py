@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 from src.cloud.aws_redshift import load_dataframe_to_redshift
 from src.cloud.aws_s3 import upload_dataframe_as_parquet, upload_directory, upload_file
 from src.extract.extract_data import ExtractionError, extract_csv
-from src.io_utils import write_dataframe_atomic
 from src.extract.kaggle_data import download_kaggle_dataset
+from src.io_utils import write_dataframe_atomic
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
