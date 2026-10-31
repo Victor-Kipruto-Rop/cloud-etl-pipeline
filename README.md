@@ -96,7 +96,7 @@ MEDALLION_ROOT=data/lake
 MEDALLION_FILE_FORMAT=parquet
 METADATA_DATABASE_URL=sqlite:///data/metadata/etl_metadata.db
 AWS_S3_BUCKET=your-private-data-lake
-S3_DATA_PREFIX=data-lake
+S3_DATA_PREFIX=
 AWS_REGION=af-south-1
 ```
 
@@ -109,7 +109,8 @@ python -m src.pipeline
 The medallion runner writes immutable run-scoped Bronze and Silver artifacts and
 stores their manifests and checksums. When `AWS_S3_BUCKET` is configured, it also
 uploads each layer artifact and manifest to the configured S3 prefix using the
-repository's server-side-encryption defaults. A source with an already committed checksum
+repository's server-side-encryption defaults. Keep the prefix empty when using the
+provided Terraform IAM policy, or extend that policy for a custom prefix. A source with an already committed checksum
 is skipped. The checkpoint advances only after artifact publication and any
 configured database sink complete successfully.
 
