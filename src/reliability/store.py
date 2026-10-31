@@ -27,7 +27,8 @@ class MetadataStore:
         self.engine = engine
         self.metadata = MetaData()
         self.runs = Table(
-            "etl_runs", self.metadata,
+            "etl_runs",
+            self.metadata,
             Column("run_id", String(36), primary_key=True),
             Column("dataset", String(255), nullable=False, index=True),
             Column("status", String(32), nullable=False),
@@ -41,7 +42,8 @@ class MetadataStore:
             Column("metadata_json", Text, nullable=False, default="{}"),
         )
         self.checkpoints = Table(
-            "etl_checkpoints", self.metadata,
+            "etl_checkpoints",
+            self.metadata,
             Column("dataset", String(255), primary_key=True),
             Column("source_uri", Text, primary_key=True),
             Column("source_checksum", String(64), nullable=False),
@@ -50,7 +52,8 @@ class MetadataStore:
             Column("committed_at", String(40), nullable=False),
         )
         self.lineage = Table(
-            "etl_lineage", self.metadata,
+            "etl_lineage",
+            self.metadata,
             Column("event_id", String(36), primary_key=True),
             Column("run_id", String(36), nullable=False, index=True),
             Column("dataset", String(255), nullable=False),
@@ -61,7 +64,8 @@ class MetadataStore:
             Column("created_at", String(40), nullable=False),
         )
         self.quarantine = Table(
-            "etl_quarantine", self.metadata,
+            "etl_quarantine",
+            self.metadata,
             Column("record_id", String(36), primary_key=True),
             Column("run_id", String(36), nullable=False, index=True),
             Column("dataset", String(255), nullable=False),
@@ -80,7 +84,9 @@ class MetadataStore:
         return json.dumps(dict(value or {}), default=str, sort_keys=True)
 
     def start_run(
-        self, dataset: str, source_uri: Optional[str] = None,
+        self,
+        dataset: str,
+        source_uri: Optional[str] = None,
         source_checksum: Optional[str] = None,
         metadata: Optional[Mapping[str, Any]] = None,
     ) -> str:
@@ -88,16 +94,27 @@ class MetadataStore:
             raise ValueError("dataset is required")
         run_id = str(uuid.uuid4())
         with self.engine.begin() as conn:
-            conn.execute(self.runs.insert().values(
-                run_id=run_id, dataset=dataset, status="running",
-                started_at=utc_now(), source_uri=source_uri,
-                source_checksum=source_checksum, rows_read=0, rows_written=0,
-                metadata_json=self._json(metadata),
-            ))
+            conn.execute(
+                self.runs.insert().values(
+                    run_id=run_id,
+                    dataset=dataset,
+                    status="running",
+                    started_at=utc_now(),
+                    source_uri=source_uri,
+                    source_checksum=source_checksum,
+                    rows_read=0,
+                    rows_written=0,
+                    metadata_json=self._json(metadata),
+                )
+            )
         return run_id
 
     def finish_run(
-        self, run_id: str, *, rows_read: int, rows_written: int,
+        self,
+        run_id: str,
+        *,
+        rows_read: int,
+        rows_written: int,
         source_uri: Optional[str] = None,
         source_checksum: Optional[str] = None,
         source_version: Optional[str] = None,
@@ -121,16 +138,30 @@ class MetadataStore:
                 raise ValueError(f"Cannot complete run in state {run['status']!r}")
             final_source = source_uri or run["source_uri"]
             final_checksum = source_checksum or run["source_checksum"]
-            conn.execute(update(self.runs).where(self.runs.c.run_id == run_id).values(
-                status="succeeded", finished_at=now, rows_read=rows_read,
-                rows_written=rows_written, source_uri=final_source,
-                source_checksum=final_checksum, metadata_json=self._json(metadata),
-            ))
+            conn.execute(
+                update(self.runs)
+                .where(self.runs.c.run_id == run_id)
+                .values(
+                    status="succeeded",
+                    finished_at=now,
+                    rows_read=rows_read,
+                    rows_written=rows_written,
+                    source_uri=final_source,
+                    source_checksum=final_checksum,
+                    metadata_json=self._json(metadata),
+                )
+            )
             if final_source and final_checksum:
-                existing = conn.execute(select(self.checkpoints).where(
-                    self.checkpoints.c.dataset == run["dataset"],
-                    self.checkpoints.c.source_uri == final_source,
-                )).mappings().first()
+                existing = (
+                    conn.execute(
+                        select(self.checkpoints).where(
+                            self.checkpoints.c.dataset == run["dataset"],
+                            self.checkpoints.c.source_uri == final_source,
+                        )
+                    )
+                    .mappings()
+                    .first()
+                )
                 values = dict(
                     source_checksum=final_checksum, source_version=source_version,
                     committed_run_id=run_id, committed_at=now,
@@ -162,34 +193,57 @@ class MetadataStore:
             return dict(row) if row else None
 
     def record_lineage(
-        self, run_id: str, dataset: str, event_type: str,
-        *, parent_uri: Optional[str] = None, child_uri: Optional[str] = None,
+        self,
+        run_id: str,
+        dataset: str,
+        event_type: str,
+        *,
+        parent_uri: Optional[str] = None,
+        child_uri: Optional[str] = None,
         details: Optional[Mapping[str, Any]] = None,
     ) -> str:
         event_id = str(uuid.uuid4())
         with self.engine.begin() as conn:
-            conn.execute(self.lineage.insert().values(
-                event_id=event_id, run_id=run_id, dataset=dataset,
-                event_type=event_type, parent_uri=parent_uri, child_uri=child_uri,
-                details_json=self._json(details), created_at=utc_now(),
-            ))
+            conn.execute(
+                self.lineage.insert().values(
+                    event_id=event_id,
+                    run_id=run_id,
+                    dataset=dataset,
+                    event_type=event_type,
+                    parent_uri=parent_uri,
+                    child_uri=child_uri,
+                    details_json=self._json(details),
+                    created_at=utc_now(),
+                )
+            )
         return event_id
 
     def quarantine_record(
-        self, run_id: str, dataset: str, source_uri: str,
-        reason_code: str, reason_message: str, payload: Any,
+        self,
+        run_id: str,
+        dataset: str,
+        source_uri: str,
+        reason_code: str,
+        reason_message: str,
+        payload: Any,
     ) -> str:
         if not reason_code:
             raise ValueError("reason_code is required")
         record_id = str(uuid.uuid4())
         with self.engine.begin() as conn:
-            conn.execute(self.quarantine.insert().values(
-                record_id=record_id, run_id=run_id, dataset=dataset,
-                source_uri=source_uri, reason_code=reason_code,
-                reason_message=reason_message,
-                payload_json=json.dumps(payload, default=str),
-                status="pending", created_at=utc_now(),
-            ))
+            conn.execute(
+                self.quarantine.insert().values(
+                    record_id=record_id,
+                    run_id=run_id,
+                    dataset=dataset,
+                    source_uri=source_uri,
+                    reason_code=reason_code,
+                    reason_message=reason_message,
+                    payload_json=json.dumps(payload, default=str),
+                    status="pending",
+                    created_at=utc_now(),
+                )
+            )
         return record_id
 
     def list_quarantine(
