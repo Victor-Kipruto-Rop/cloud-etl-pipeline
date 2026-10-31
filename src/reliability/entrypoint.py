@@ -63,12 +63,8 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
             source = Path(source)
             try:
                 source_df = extract_csv(source)
-                silver_df = transform(
-                    source_df, normalize_cols=True, handle_missing="drop_all"
-                )
                 result = execute_dataset(
                     source_df,
-                    silver_df,
                     dataset=source.stem,
                     source_uri=str(source.resolve()),
                     source_checksum=_checksum(source),
@@ -76,6 +72,9 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     layer_root=layer_root,
                     validate=lambda frame: validate_df(
                         frame, required_columns=required_columns
+                    ),
+                    transform=lambda frame: transform(
+                        frame, normalize_cols=True, handle_missing="drop_all"
                     ),
                     database_engine=database_engine,
                     target_table=os.getenv("TARGET_TABLE") or source.stem,
