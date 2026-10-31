@@ -34,9 +34,19 @@ def _write_manifest(path: Path, payload: dict) -> None:
         raise
 
 
-def write_layer(dataframe: pd.DataFrame, *, root, layer: str, dataset: str,
-                run_id: str, ingestion_date=None, file_format="parquet",
-                source_uri=None, source_checksum=None, schema_version="1") -> dict:
+def write_layer(
+    dataframe: pd.DataFrame,
+    *,
+    root,
+    layer: str,
+    dataset: str,
+    run_id: str,
+    ingestion_date=None,
+    file_format: str = "parquet",
+    source_uri: str | None = None,
+    source_checksum: str | None = None,
+    schema_version: str = "1",
+) -> dict:
     """Write an immutable run-scoped artifact and a checksum manifest."""
     layer = _safe(layer.lower(), "layer")
     if layer not in {"bronze", "silver", "gold"}:
