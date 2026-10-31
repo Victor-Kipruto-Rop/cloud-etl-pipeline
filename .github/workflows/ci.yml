@@ -78,7 +78,20 @@ jobs:
           TEST_DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/etl_db
           PYTHONPATH: .
         run: |
-          pytest -q --ignore=tests/test_perf_copy.py --cov=src --cov-report=xml:coverage.xml
+          mkdir -p test_artifacts
+          set -o pipefail
+          pytest -q --ignore=tests/test_perf_copy.py --cov=src --cov-report=xml:coverage.xml --junitxml=test_artifacts/junit.xml 2>&1 | tee test_artifacts/pytest.log
+
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-diagnostics
+          path: |
+            test_artifacts/
+            coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Smoke test application health
         env:
