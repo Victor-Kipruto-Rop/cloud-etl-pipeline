@@ -70,3 +70,29 @@ def test_data_quality_failure_is_quarantined(tmp_path):
 
     assert metadata.get_checkpoint("customers", "file://customers.csv") is None
     assert len(metadata.list_quarantine(dataset="customers")) == 1
+
+
+def test_s3_layer_uploads_are_part_of_successful_run(tmp_path, monkeypatch):
+    from src.reliability import runner
+
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    frame = pd.DataFrame({"id": [1]})
+    uploaded = []
+
+    def fake_upload(path, bucket, key, region_name=None):
+        uploaded.append((str(path), bucket, key, region_name))
+        return f"s3://{bucket}/{key}"
+
+    monkeypatch.setattr(runner, "upload_file", fake_upload)
+    result = execute_dataset(
+        frame, frame, dataset="events", source_uri="events.csv",
+        source_checksum="checksum", metadata_store=metadata,
+        layer_root=tmp_path / "lake", file_format="csv",
+        s3_bucket="example-data-lake", s3_prefix="analytics",
+        aws_region="af-south-1",
+    )
+
+    assert result["status"] == "succeeded"
+    assert len(uploaded) == 4
+    assert all(item[1] == "example-data-lake" for item in uploaded)
+    assert all(item[3] == "af-south-1" for item in uploaded)
