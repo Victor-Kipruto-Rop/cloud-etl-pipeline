@@ -18,10 +18,13 @@ from src.io_utils import write_dataframe_atomic
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
 from src.load.staging_loader import upsert_from_staging
-from src.metrics.metrics import files_failed, files_processed
-from src.metrics.metrics import rows_extracted as metric_rows_extracted
-from src.metrics.metrics import rows_loaded as metric_rows_loaded
-from src.metrics.metrics import start_metrics_server
+from src.metrics.metrics import (
+    files_failed,
+    files_processed,
+    rows_extracted as metric_rows_extracted,
+    rows_loaded as metric_rows_loaded,
+    start_metrics_server,
+)
 from src.reliability.entrypoint import run_medallion_files
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
