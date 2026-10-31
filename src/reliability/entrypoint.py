@@ -37,9 +37,10 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
     otherwise DATABASE_URL is reused, or a local SQLite ledger is created.
     """
     database_url = os.getenv("DATABASE_URL")
-    metadata_url = os.getenv(
-        "METADATA_DATABASE_URL",
-        database_url or "sqlite:///data/metadata/etl_metadata.db",
+    metadata_url = (
+        os.getenv("METADATA_DATABASE_URL")
+        or database_url
+        or "sqlite:///data/metadata/etl_metadata.db"
     )
     if database_url and not os.getenv("UPSERT_KEY_COLUMNS", "").strip():
         raise ValueError(
