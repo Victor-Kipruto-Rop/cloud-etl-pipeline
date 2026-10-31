@@ -1,5 +1,6 @@
 """Filesystem entrypoint for incremental medallion ETL execution."""
 import hashlib
+import json
 import logging
 import os
 from pathlib import Path
@@ -10,7 +11,12 @@ from src.extract.extract_data import extract_csv
 from src.reliability.runner import execute_dataset
 from src.reliability.store import MetadataStore
 from src.transform.transform_data import transform
-from src.validation import parse_required_columns, validate_df
+from src.validation import (
+    DataQualityContract,
+    parse_required_columns,
+    validate_contract,
+    validate_df,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +56,18 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
     )
     store = MetadataStore(metadata_engine)
     required_columns = parse_required_columns(os.getenv("REQUIRED_COLUMNS"))
+    contract_path = os.getenv("DATA_QUALITY_CONTRACT_PATH")
+    contract = None
+    if contract_path:
+        with Path(contract_path).open(encoding="utf-8") as contract_file:
+            contract = DataQualityContract(**json.load(contract_file))
+
+    def validate_source(dataframe):
+        if contract is not None:
+            validate_contract(dataframe, contract)
+        else:
+            validate_df(dataframe, required_columns=required_columns)
+
     conflict_columns = tuple(
         column.strip()
         for column in os.getenv("UPSERT_KEY_COLUMNS", "").split(",")
@@ -70,9 +88,7 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     source_checksum=_checksum(source),
                     metadata_store=store,
                     layer_root=layer_root,
-                    validate=lambda frame: validate_df(
-                        frame, required_columns=required_columns
-                    ),
+                    validate=validate_source,
                     transform=lambda frame: transform(
                         frame, normalize_cols=True, handle_missing="drop_all"
                     ),
