@@ -62,6 +62,7 @@ def execute_dataset(
     dataset: str,
     source_uri: str,
     source_checksum: str,
+    source_version: Optional[str] = None,
     metadata_store: MetadataStore,
     layer_root: str | Path,
     validate: Optional[Callable[[pd.DataFrame], None]] = None,
@@ -93,7 +94,14 @@ def execute_dataset(
         raise TypeError("silver_dataframe must be a pandas DataFrame")
     started = monotonic()
     checkpoint = metadata_store.get_checkpoint(dataset, source_uri)
-    if checkpoint and checkpoint["source_checksum"] == source_checksum:
+    if (
+        checkpoint
+        and checkpoint["source_checksum"] == source_checksum
+        and (
+            source_version is None
+            or checkpoint["source_version"] == source_version
+        )
+    ):
         dataset_runs.labels(status="skipped").inc()
         dataset_duration.observe(monotonic() - started)
         return {
@@ -242,7 +250,9 @@ def execute_dataset(
 
         metadata_store.finish_run(
             run_id, rows_read=len(source_dataframe), rows_written=loaded_rows,
-            source_uri=source_uri, source_checksum=source_checksum,
+            source_uri=source_uri,
+            source_checksum=source_checksum,
+            source_version=source_version,
         )
         dataset_runs.labels(status="succeeded").inc()
         dataset_rows.labels(layer="bronze").inc(len(source_dataframe))
