@@ -74,6 +74,15 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
         for column in os.getenv("UPSERT_KEY_COLUMNS", "").split(",")
         if column.strip()
     )
+    contract_signature = json.dumps(
+        {
+            "contract": contract.as_dict() if contract is not None else None,
+            "required_columns": list(required_columns or []),
+            "transform_version": os.getenv("TRANSFORM_VERSION", "1"),
+        },
+        sort_keys=True,
+    )
+    source_version = hashlib.sha256(contract_signature.encode("utf-8")).hexdigest()
     file_format = os.getenv("MEDALLION_FILE_FORMAT", "parquet").lower()
     successful = True
 
@@ -87,6 +96,7 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     dataset=source.stem,
                     source_uri=str(source.resolve()),
                     source_checksum=_checksum(source),
+                    source_version=source_version,
                     metadata_store=store,
                     layer_root=layer_root,
                     validate=validate_source,
