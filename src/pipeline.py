@@ -210,9 +210,9 @@ def process_file(
                 # move offending file to quarantine
                 quarantine = RAW_DIR / "quarantine"
                 quarantine.mkdir(parents=True, exist_ok=True)
-                target = (
-                    quarantine
-                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                target = quarantine / (
+                    f"{csv_file.stem}_{int(datetime.now().timestamp())}"
+                    f"{csv_file.suffix}"
                 )
                 try:
                     csv_file.replace(target)
@@ -229,9 +229,9 @@ def process_file(
             try:
                 quarantine = RAW_DIR / "quarantine"
                 quarantine.mkdir(parents=True, exist_ok=True)
-                target = (
-                    quarantine
-                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                target = quarantine / (
+                    f"{csv_file.stem}_{int(datetime.now().timestamp())}"
+                    f"{csv_file.suffix}"
                 )
                 csv_file.replace(target)
                 logger.info(f"Moved unexpected-failure file to quarantine: {target}")
