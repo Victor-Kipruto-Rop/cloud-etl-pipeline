@@ -145,3 +145,91 @@ def test_contract_version_change_reprocesses_unchanged_source(tmp_path):
     assert first["run_id"] != second["run_id"]
     checkpoint = metadata.get_checkpoint("items", "items.csv")
     assert checkpoint["source_version"] == "contract-v2"
+
+
+def test_source_and_silver_validators_receive_their_respective_frames(tmp_path):
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    raw = pd.DataFrame({"Raw Name": [" Ada "]})
+    silver = pd.DataFrame({"raw_name": ["ada"]})
+    seen = {"source": False, "silver": False}
+
+    def validate_source(frame):
+        assert list(frame.columns) == ["Raw Name"]
+        seen["source"] = True
+
+    def validate_silver(frame):
+        assert list(frame.columns) == ["raw_name"]
+        assert frame.iloc[0]["raw_name"] == "ada"
+        seen["silver"] = True
+
+    result = execute_dataset(
+        raw,
+        dataset="customers",
+        source_uri="customers.csv",
+        source_checksum="source-v1",
+        metadata_store=metadata,
+        layer_root=tmp_path / "lake",
+        file_format="csv",
+        validate_source=validate_source,
+        transform=lambda _: silver,
+        validate=validate_silver,
+    )
+
+    assert result["status"] == "succeeded"
+    assert seen == {"source": True, "silver": True}
+
+
+def test_silver_validation_failure_prevents_checkpoint_commit(tmp_path):
+    from src.validation import ValidationError
+
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    raw = pd.DataFrame({"id": [1]})
+    silver = pd.DataFrame({"id": [None]})
+
+    def reject_silver(frame):
+        if frame["id"].isna().any():
+            raise ValidationError("silver id cannot be null")
+
+    with pytest.raises(ValidationError, match="silver id cannot be null"):
+        execute_dataset(
+            raw,
+            dataset="items",
+            source_uri="items.csv",
+            source_checksum="source-v1",
+            metadata_store=metadata,
+            layer_root=tmp_path / "lake",
+            file_format="csv",
+            transform=lambda _: silver,
+            validate=reject_silver,
+        )
+
+    assert metadata.get_checkpoint("items", "items.csv") is None
+    assert len(metadata.list_quarantine(dataset="items")) == 1
+
+
+def test_dataset_duration_is_observed_once_for_success_and_skip(tmp_path, monkeypatch):
+    from src.reliability import runner
+
+    class DurationSpy:
+        def __init__(self):
+            self.observations = []
+
+        def observe(self, value):
+            self.observations.append(value)
+
+    duration = DurationSpy()
+    monkeypatch.setattr(runner, "dataset_duration", duration)
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    frame = pd.DataFrame({"id": [1]})
+    args = {
+        "dataset": "metrics",
+        "source_uri": "metrics.csv",
+        "source_checksum": "same",
+        "metadata_store": metadata,
+        "layer_root": tmp_path / "lake",
+        "file_format": "csv",
+    }
+
+    assert execute_dataset(frame, frame, **args)["status"] == "succeeded"
+    assert execute_dataset(frame, frame, **args)["status"] == "skipped"
+    assert len(duration.observations) == 2
