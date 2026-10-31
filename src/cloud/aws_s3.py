@@ -43,8 +43,8 @@ def upload_file(
 
     upload_args = {"ServerSideEncryption": "AES256"}
     upload_args.update(extra_args or {})
-    if upload_args.get("ACL", "").lower() in {"public-read", "public-read-write"}:
-        raise ValueError("Public S3 object ACLs are not permitted by this helper")
+    if "ACL" in upload_args:
+        raise ValueError("S3 object ACLs are disabled; use bucket policies and IAM")
 
     try:
         client.upload_file(
@@ -99,8 +99,8 @@ def upload_dataframe_as_parquet(
 
     upload_args = {"ServerSideEncryption": "AES256"}
     upload_args.update(extra_args or {})
-    if upload_args.get("ACL", "").lower() in {"public-read", "public-read-write"}:
-        raise ValueError("Public S3 object ACLs are not permitted by this helper")
+    if "ACL" in upload_args:
+        raise ValueError("S3 object ACLs are disabled; use bucket policies and IAM")
 
     try:
         client.upload_fileobj(buffer, bucket, key, ExtraArgs=upload_args)
