@@ -61,6 +61,51 @@ prefix isolation, and data handling policies have been reviewed.
 - Quarantine invalid records with a reason and controlled replay path; do not silently drop
   them or repeatedly retry deterministic data errors.
 
+
+## Incremental medallion mode
+
+Enable MEDALLION_PIPELINE_ENABLED=true and configure MEDALLION_ROOT. The default
+metadata URL in the example environment is local SQLite and is suitable only for
+single-machine development. For shared or production execution, set
+METADATA_DATABASE_URL to a managed PostgreSQL database with backups and restricted
+network access.
+
+When enabling a database sink, set DATABASE_URL, TARGET_SCHEMA, TARGET_TABLE and
+UPSERT_KEY_COLUMNS. The target table and a matching unique constraint must exist
+before the first run. Do not choose an arbitrary row number as a business key.
+
+A successful source checksum is recorded in etl_checkpoints only after layer artifacts
+and the configured database sink have committed. An unchanged source is skipped.
+A changed source is processed as a new run. Failed runs do not advance checkpoints.
+
+## Quarantine and replay
+
+1. Query pending records in etl_quarantine and inspect reason_code / reason_message.
+2. Correct the source data or transformation contract before replay.
+3. Use restore_quarantined_file from src.reliability.replay to copy the original
+   source into a controlled intake directory.
+4. Re-run the ordinary pipeline path; do not write directly into warehouse tables.
+5. After the run succeeds and the downstream sink is reconciled, call
+   MetadataStore.mark_replayed(record_id).
+6. Keep the original quarantine record and incident evidence according to retention
+   policy. Do not automatically delete the original source.
+
+## dbt and Airflow
+
+- Install dbt separately with requirements-dbt.txt and validate the profile using
+  dbt debug before running models against a warehouse.
+- Confirm the raw.orders source table exists and matches dbt/models/staging/sources.yml.
+- Deploy dags/cloud_etl_pipeline.py only after the Airflow worker image has the
+  repository, dependencies, environment configuration and approved connections.
+- Use Airflow task logs and etl_runs metadata together when investigating a failed run.
+
+## AWS data lake
+
+The standalone module at infra/aws/data_lake provisions an encrypted private bucket,
+versioning, TLS-only access and prefix-scoped read/write permissions. Run Terraform
+format, validate and plan in a controlled environment before any apply. Verify the
+execution role already exists and review retention settings with the data owner.
+
 ## Incident closure
 
 Record the impact, affected datasets, start/end time, root cause, recovery action, row-count
