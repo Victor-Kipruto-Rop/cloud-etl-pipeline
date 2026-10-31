@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/workspace
+
+WORKDIR /workspace
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN python -m pip install --upgrade pip \
+    && pip install -r requirements.txt
+
+RUN groupadd --system etl \
+    && useradd --system --gid etl --create-home --home-dir /home/etl etl \
+    && mkdir -p /workspace/data/raw /workspace/data/processed /workspace/data/analytics /workspace/logs \
+    && chown -R etl:etl /workspace /home/etl
+
+USER etl
+
+CMD ["bash"]
