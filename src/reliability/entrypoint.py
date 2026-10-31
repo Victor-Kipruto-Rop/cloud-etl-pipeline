@@ -97,7 +97,7 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     target_schema=os.getenv("TARGET_SCHEMA") or None,
                     conflict_columns=conflict_columns,
                     s3_bucket=os.getenv("AWS_S3_BUCKET") or None,
-                    s3_prefix=os.getenv("S3_DATA_PREFIX", "data-lake"),
+                    s3_prefix=os.getenv("S3_DATA_PREFIX", ""),
                     aws_region=os.getenv("AWS_REGION") or None,
                     file_format=file_format,
                 )
