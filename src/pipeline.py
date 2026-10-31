@@ -324,6 +324,8 @@ def run(cancel_event: Event | None = None):
 
     if os.getenv("MEDALLION_PIPELINE_ENABLED", "false").lower() == "true":
         logger.info("Running incremental medallion pipeline")
+        if engine is not None:
+            engine.dispose()
         return run_medallion_files(
             csv_files,
             layer_root=os.getenv("MEDALLION_ROOT", "data/lake"),
