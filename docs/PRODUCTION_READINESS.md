@@ -13,23 +13,33 @@ itself mean those components are deployed or production-validated.
   and allowed values.
 - Atomic local CSV / Parquet artifact publication. A failed write does not replace
   a previously published local output file.
+- Opt-in medallion execution with SHA-256 source checksums, run records, committed
+  checkpoints, lineage events, and data-quality quarantine metadata.
+- Immutable Bronze and Silver file artifacts with per-run manifests and checksums;
+  optional Gold artifact publication is supported by the runner.
+- Transactional business-key upsert helper with duplicate-input-key collapse and
+  identifier validation.
+- Controlled quarantine source restoration; replay state is not marked complete until
+  an operator confirms successful processing.
+- Optional dbt staging / fact models and a canonical Airflow DAG.
+- Standalone Terraform module for private S3 data lake controls and prefix-scoped IAM.
 
 ## Required before a production launch
 
 ### Data correctness
 - Define source-specific contracts and stable business keys.
-- Use idempotent upserts or merge semantics for every production sink.
-- Persist ingestion checkpoints only after durable writes commit.
-- Define late-arriving data, replay, backfill, and schema-evolution policies.
-- Route invalid records to a durable quarantine with reason codes and controlled replay.
-- Compare source, landed, transformed, and published row counts.
+- Configure a durable shared metadata database; the default SQLite path is for local development.
+- Create target tables and unique constraints that match configured business keys, then run PostgreSQL integration tests.
+- Define late-arriving data, replay, backfill, and schema-evolution policies for each source.
+- Configure quarantine ownership, retention, review SLAs, and an operator-approved replay workflow.
+- Compare source, landed, transformed, and published row counts in the target environment.
 
 ### Security and governance
 - Use IAM roles / workload identity instead of long-lived AWS access keys where possible.
 - Store credentials in a secret manager; never place secrets in images, logs, workflow
   output, or committed environment files.
-- Restrict S3 bucket access, enable encryption, block public access, and define lifecycle
-  and retention policies.
+- Apply and review the standalone S3 data-lake Terraform module; verify encryption,
+  public-access blocks, TLS-only access, versioning, lifecycle, and IAM permissions.
 - Use TLS for database connections and least-privilege database roles.
 - Classify sensitive fields, define retention, and redact personal data from logs.
 - Pin and review dependencies; generate an SBOM and scan dependencies and container images.
@@ -47,6 +57,8 @@ itself mean those components are deployed or production-validated.
 - Use separate AWS accounts or isolated roles for dev, staging, and production.
 - Require protected environments and human approval for production.
 - Promote the same immutable artifact between environments.
+- Install the optional dbt toolchain and validate the declared source contract against the real raw schema.
+- Deploy the Airflow DAG only to a worker image with this repository and all runtime dependencies.
 - Run integration and smoke tests after deployment; define a tested rollback procedure.
 - Do not claim canary deployment or automatic rollback until traffic shifting and rollback
   are implemented and exercised in the target runtime.
