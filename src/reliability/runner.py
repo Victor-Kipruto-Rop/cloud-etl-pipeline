@@ -111,7 +111,10 @@ def execute_dataset(
         }
 
     run_id = metadata_store.start_run(
-        dataset, source_uri=source_uri, source_checksum=source_checksum
+        dataset,
+        source_uri=source_uri,
+        source_checksum=source_checksum,
+        metadata={"source_version": source_version},
     )
     try:
         if validate:
