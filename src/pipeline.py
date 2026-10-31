@@ -18,6 +18,7 @@ from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
 from src.io_utils import write_dataframe_atomic
+from src.reliability.entrypoint import run_medallion_files
 from src.load.staging_loader import upsert_from_staging
 from src.metrics.metrics import (
     files_failed,
@@ -320,6 +321,13 @@ def run(cancel_event: Event | None = None):
     if not csv_files:
         logger.warning(f"No CSV files found in {RAW_DIR}")
         return True
+
+    if os.getenv("MEDALLION_PIPELINE_ENABLED", "false").lower() == "true":
+        logger.info("Running incremental medallion pipeline")
+        return run_medallion_files(
+            csv_files,
+            layer_root=os.getenv("MEDALLION_ROOT", "data/lake"),
+        )
 
     logger.info(f"Found {len(csv_files)} CSV file(s) to process:")
     for f in csv_files:
