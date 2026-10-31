@@ -97,6 +97,8 @@ A changed source is processed as a new run. Failed runs do not advance checkpoin
 - Confirm the raw.orders source table exists and matches dbt/models/staging/sources.yml.
 - Deploy dags/cloud_etl_pipeline.py only after the Airflow worker image has the
   repository, dependencies, environment configuration and approved connections.
+- Set DBT_ENABLED=true in the scheduler environment to include dbt run/test after ETL;
+  configure DBT_PROJECT_DIR, DBT_PROFILES_DIR and DBT_PG_* on the worker.
 - Use Airflow task logs and etl_runs metadata together when investigating a failed run.
 
 ## AWS data lake
