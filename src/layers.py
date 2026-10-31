@@ -20,6 +20,14 @@ def _safe(value, label):
     return value
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _write_manifest(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".manifest.", dir=str(path.parent))
@@ -71,7 +79,7 @@ def write_layer(
         write_dataframe_atomic(dataframe, artifact, compression="snappy")
     else:
         write_dataframe_atomic(dataframe, artifact)
-    checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    checksum = _sha256(artifact)
     manifest = {
         "layer": layer,
         "dataset": dataset,
