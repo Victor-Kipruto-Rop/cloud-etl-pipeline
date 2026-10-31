@@ -1,6 +1,7 @@
 """End-to-end reliable dataset execution across medallion layers and sinks."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from time import monotonic
 from typing import Callable, Optional
@@ -17,6 +18,9 @@ from src.reliability.metrics import (
     quarantine_records,
 )
 from src.reliability.store import MetadataStore
+from src.validation import ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 def execute_dataset(
@@ -63,7 +67,7 @@ def execute_dataset(
     )
     try:
         if validate:
-            validate(silver_dataframe)
+            validate(source_dataframe)
 
         bronze = write_layer(
             source_dataframe, root=layer_root, layer="bronze", dataset=dataset,
@@ -130,23 +134,34 @@ def execute_dataset(
             "silver": silver["artifact_path"],
             "gold": gold["artifact_path"] if gold_dataframe is not None else None,
         }
-    except Exception as exc:
+    except ValidationError as exc:
         dataset_runs.labels(status="failed").inc()
         quarantine_records.inc()
         try:
             metadata_store.quarantine_record(
-                run_id, dataset, source_uri, "DATASET_EXECUTION_FAILED",
+                run_id,
+                dataset,
+                source_uri,
+                "DATA_QUALITY_FAILURE",
                 str(exc),
                 {
                     "source_checksum": source_checksum,
                     "exception_type": type(exc).__name__,
                 },
             )
+        except Exception:
+            logger.exception("Could not persist data-quality quarantine record")
+        try:
             metadata_store.fail_run(run_id, str(exc))
         except Exception:
-            # Preserve the original processing exception; metadata-store failures
-            # must be visible in logs/monitoring at the caller boundary.
-            pass
+            logger.exception("Could not mark data-quality run as failed")
+        raise
+    except Exception as exc:
+        dataset_runs.labels(status="failed").inc()
+        try:
+            metadata_store.fail_run(run_id, str(exc))
+        except Exception:
+            logger.exception("Could not mark failed dataset run")
         raise
     finally:
         dataset_duration.observe(monotonic() - started)
