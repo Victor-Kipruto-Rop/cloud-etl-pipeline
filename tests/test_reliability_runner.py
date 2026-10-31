@@ -124,3 +124,24 @@ def test_s3_layer_uploads_are_part_of_successful_run(tmp_path, monkeypatch):
     assert len(uploaded) == 4
     assert all(item[1] == "example-data-lake" for item in uploaded)
     assert all(item[3] == "af-south-1" for item in uploaded)
+
+
+def test_contract_version_change_reprocesses_unchanged_source(tmp_path):
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    frame = pd.DataFrame({"id": [1]})
+    common = dict(
+        dataset="items",
+        source_uri="items.csv",
+        source_checksum="same-source",
+        metadata_store=metadata,
+        layer_root=tmp_path / "lake",
+        file_format="csv",
+    )
+    first = execute_dataset(frame, frame, source_version="contract-v1", **common)
+    second = execute_dataset(frame, frame, source_version="contract-v2", **common)
+
+    assert first["status"] == "succeeded"
+    assert second["status"] == "succeeded"
+    assert first["run_id"] != second["run_id"]
+    checkpoint = metadata.get_checkpoint("items", "items.csv")
+    assert checkpoint["source_version"] == "contract-v2"
