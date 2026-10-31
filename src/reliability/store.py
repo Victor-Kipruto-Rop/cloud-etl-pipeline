@@ -11,7 +11,15 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Optional
 
 from sqlalchemy import (
-    Column, Integer, MetaData, String, Table, Text, create_engine, select, update
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    create_engine,
+    select,
+    update,
 )
 from sqlalchemy.engine import Engine
 
@@ -162,34 +170,59 @@ class MetadataStore:
                     .mappings()
                     .first()
                 )
-                values = dict(
-                    source_checksum=final_checksum, source_version=source_version,
-                    committed_run_id=run_id, committed_at=now,
-                )
+                values = {
+                    "source_checksum": final_checksum,
+                    "source_version": source_version,
+                    "committed_run_id": run_id,
+                    "committed_at": now,
+                }
                 if existing:
-                    conn.execute(update(self.checkpoints).where(
-                        self.checkpoints.c.dataset == run["dataset"],
-                        self.checkpoints.c.source_uri == final_source,
-                    ).values(**values))
+                    conn.execute(
+                        update(self.checkpoints)
+                        .where(
+                            self.checkpoints.c.dataset == run["dataset"],
+                            self.checkpoints.c.source_uri == final_source,
+                        )
+                        .values(**values)
+                    )
                 else:
-                    conn.execute(self.checkpoints.insert().values(
-                        dataset=run["dataset"], source_uri=final_source, **values
-                    ))
+                    conn.execute(
+                        self.checkpoints.insert().values(
+                            dataset=run["dataset"],
+                            source_uri=final_source,
+                            **values,
+                        )
+                    )
 
     def fail_run(self, run_id: str, error: str) -> None:
         with self.engine.begin() as conn:
-            result = conn.execute(update(self.runs).where(
-                self.runs.c.run_id == run_id, self.runs.c.status == "running"
-            ).values(status="failed", finished_at=utc_now(), error_message=str(error)))
+            result = conn.execute(
+                update(self.runs)
+                .where(
+                    self.runs.c.run_id == run_id,
+                    self.runs.c.status == "running",
+                )
+                .values(
+                    status="failed",
+                    finished_at=utc_now(),
+                    error_message=str(error),
+                )
+            )
             if result.rowcount != 1:
                 raise KeyError(f"Unknown or non-running run_id: {run_id}")
 
     def get_checkpoint(self, dataset: str, source_uri: str) -> Optional[dict[str, Any]]:
         with self.engine.connect() as conn:
-            row = conn.execute(select(self.checkpoints).where(
-                self.checkpoints.c.dataset == dataset,
-                self.checkpoints.c.source_uri == source_uri,
-            )).mappings().first()
+            row = (
+                conn.execute(
+                    select(self.checkpoints).where(
+                        self.checkpoints.c.dataset == dataset,
+                        self.checkpoints.c.source_uri == source_uri,
+                    )
+                )
+                .mappings()
+                .first()
+            )
             return dict(row) if row else None
 
     def record_lineage(
@@ -261,17 +294,25 @@ class MetadataStore:
     def mark_replayed(self, record_id: str, replay_run_id: str) -> None:
         """Mark quarantine resolved only after a successful run for the same dataset."""
         with self.engine.begin() as conn:
-            record = conn.execute(
-                select(self.quarantine).where(
-                    self.quarantine.c.record_id == record_id,
-                    self.quarantine.c.status == "pending",
+            record = (
+                conn.execute(
+                    select(self.quarantine).where(
+                        self.quarantine.c.record_id == record_id,
+                        self.quarantine.c.status == "pending",
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             if record is None:
                 raise KeyError(f"Unknown or already replayed record: {record_id}")
-            replay_run = conn.execute(
-                select(self.runs).where(self.runs.c.run_id == replay_run_id)
-            ).mappings().first()
+            replay_run = (
+                conn.execute(
+                    select(self.runs).where(self.runs.c.run_id == replay_run_id)
+                )
+                .mappings()
+                .first()
+            )
             if (
                 replay_run is None
                 or replay_run["status"] != "succeeded"
