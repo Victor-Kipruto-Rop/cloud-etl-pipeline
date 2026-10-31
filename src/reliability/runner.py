@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import monotonic
 from typing import Callable, Optional
 
 import pandas as pd
@@ -9,6 +10,12 @@ from sqlalchemy.engine import Engine
 
 from src.layers import write_layer
 from src.load.idempotent import upsert_dataframe
+from src.reliability.metrics import (
+    dataset_duration,
+    dataset_rows,
+    dataset_runs,
+    quarantine_records,
+)
 from src.reliability.store import MetadataStore
 
 
@@ -40,8 +47,11 @@ def execute_dataset(
         silver_dataframe, pd.DataFrame
     ):
         raise TypeError("source_dataframe and silver_dataframe must be DataFrames")
+    started = monotonic()
     checkpoint = metadata_store.get_checkpoint(dataset, source_uri)
     if checkpoint and checkpoint["source_checksum"] == source_checksum:
+        dataset_runs.labels(status="skipped").inc()
+        dataset_duration.observe(monotonic() - started)
         return {
             "status": "skipped",
             "run_id": checkpoint["committed_run_id"],
@@ -105,6 +115,11 @@ def execute_dataset(
             run_id, rows_read=len(source_dataframe), rows_written=loaded_rows,
             source_uri=source_uri, source_checksum=source_checksum,
         )
+        dataset_runs.labels(status="succeeded").inc()
+        dataset_rows.labels(layer="bronze").inc(len(source_dataframe))
+        dataset_rows.labels(layer="silver").inc(len(silver_dataframe))
+        if gold_dataframe is not None:
+            dataset_rows.labels(layer="gold").inc(len(gold_dataframe))
         return {
             "status": "succeeded",
             "run_id": run_id,
@@ -115,6 +130,8 @@ def execute_dataset(
             "gold": gold["artifact_path"] if gold_dataframe is not None else None,
         }
     except Exception as exc:
+        dataset_runs.labels(status="failed").inc()
+        quarantine_records.inc()
         try:
             metadata_store.quarantine_record(
                 run_id, dataset, source_uri, "DATASET_EXECUTION_FAILED",
@@ -127,3 +144,5 @@ def execute_dataset(
             # must be visible in logs/monitoring at the caller boundary.
             pass
         raise
+    finally:
+        dataset_duration.observe(monotonic() - started)
