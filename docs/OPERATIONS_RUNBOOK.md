@@ -86,7 +86,7 @@ A changed source is processed as a new run. Failed runs do not advance checkpoin
    source into a controlled intake directory.
 4. Re-run the ordinary pipeline path; do not write directly into warehouse tables.
 5. After the run succeeds and the downstream sink is reconciled, call
-   MetadataStore.mark_replayed(record_id).
+   MetadataStore.mark_replayed(record_id, replay_run_id).
 6. Keep the original quarantine record and incident evidence according to retention
    policy. Do not automatically delete the original source.
 
