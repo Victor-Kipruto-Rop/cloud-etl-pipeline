@@ -1,0 +1,35 @@
+# Git and local tooling
+.git
+.github
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+coverage.xml
+htmlcov
+
+# Local data and runtime artifacts
+data/
+logs/
+*.log
+
+# Credentials and environment files
+.env
+.env.*
+!.env.example
+!.env.dev.example
+!.env.staging.example
+!.env.production.example
+.kaggle/
+.kaggle.json
+kaggle.json
+
+# Editor and OS files
+.vscode
+.idea
+.DS_Store
+Thumbs.db
