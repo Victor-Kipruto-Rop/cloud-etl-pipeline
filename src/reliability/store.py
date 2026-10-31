@@ -112,7 +112,7 @@ class MetadataStore:
                     source_checksum=source_checksum,
                     rows_read=0,
                     rows_written=0,
-                    metadata_json=self._json(run_metadata),
+                    metadata_json=self._json(metadata),
                 )
             )
         return run_id
@@ -158,7 +158,7 @@ class MetadataStore:
                     rows_written=rows_written,
                     source_uri=final_source,
                     source_checksum=final_checksum,
-                    metadata_json=self._json(metadata),
+                    metadata_json=self._json(run_metadata),
                 )
             )
             if final_source and final_checksum:
