@@ -8,7 +8,12 @@ from src.load.idempotent import IdempotentLoadError, upsert_dataframe
 def test_upsert_is_idempotent_and_updates_existing_rows(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'warehouse.db'}")
     with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT, city TEXT)"))
+        conn.execute(
+            text(
+                "CREATE TABLE customers ("
+                "customer_id INTEGER PRIMARY KEY, name TEXT, city TEXT)"
+            )
+        )
         conn.execute(text("INSERT INTO customers VALUES (1, 'Old', 'Nairobi')"))
     frame = pd.DataFrame([
         {"customer_id": 1, "name": "Updated", "city": "Mombasa"},
@@ -29,7 +34,9 @@ def test_upsert_is_idempotent_and_updates_existing_rows(tmp_path):
 def test_upsert_rejects_unsafe_identifiers_and_unknown_columns(tmp_path):
     engine = create_engine(f"sqlite:///{tmp_path / 'warehouse.db'}")
     with engine.begin() as conn:
-        conn.execute(text("CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT)"))
+        conn.execute(
+            text("CREATE TABLE customers (customer_id INTEGER PRIMARY KEY, name TEXT)")
+        )
     with pytest.raises(ValueError):
         upsert_dataframe(engine, pd.DataFrame({"customer_id": [1]}),
                          table_name="customers;drop", conflict_columns=["customer_id"])
