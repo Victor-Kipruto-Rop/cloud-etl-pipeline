@@ -3,10 +3,9 @@ import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Event
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -15,20 +14,15 @@ from src.config import get_config
 from src.dashboard import generate_dashboard
 from src.extract.extract_data import ExtractionError, extract_csv
 from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
+from src.io_utils import write_dataframe_atomic
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
-from src.io_utils import write_dataframe_atomic
-from src.reliability.entrypoint import run_medallion_files
 from src.load.staging_loader import upsert_from_staging
-from src.metrics.metrics import (
-    files_failed,
-    files_processed,
-)
+from src.metrics.metrics import files_failed, files_processed
 from src.metrics.metrics import rows_extracted as metric_rows_extracted
 from src.metrics.metrics import rows_loaded as metric_rows_loaded
-from src.metrics.metrics import (
-    start_metrics_server,
-)
+from src.metrics.metrics import start_metrics_server
+from src.reliability.entrypoint import run_medallion_files
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
