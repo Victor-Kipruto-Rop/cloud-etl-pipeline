@@ -25,6 +25,7 @@ def execute_dataset(
     gold_dataframe: Optional[pd.DataFrame] = None,
     database_engine: Optional[Engine] = None,
     target_table: Optional[str] = None,
+    target_schema: Optional[str] = None,
     conflict_columns: tuple[str, ...] = (),
     file_format: str = "parquet",
 ) -> dict:
@@ -97,6 +98,7 @@ def execute_dataset(
             loaded_rows = upsert_dataframe(
                 database_engine, silver_dataframe, table_name=target_table,
                 conflict_columns=conflict_columns,
+                schema=target_schema,
             )
 
         metadata_store.finish_run(
