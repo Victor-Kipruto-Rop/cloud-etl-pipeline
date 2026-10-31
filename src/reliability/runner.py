@@ -18,6 +18,7 @@ from src.reliability.metrics import (
     quarantine_records,
 )
 from src.reliability.store import MetadataStore
+from src.transform.transform_data import TransformError
 from src.validation import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def execute_dataset(
     source_dataframe: pd.DataFrame,
-    silver_dataframe: pd.DataFrame,
+    silver_dataframe: Optional[pd.DataFrame] = None,
     *,
     dataset: str,
     source_uri: str,
@@ -33,6 +34,7 @@ def execute_dataset(
     metadata_store: MetadataStore,
     layer_root: str | Path,
     validate: Optional[Callable[[pd.DataFrame], None]] = None,
+    transform: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
     gold_dataframe: Optional[pd.DataFrame] = None,
     database_engine: Optional[Engine] = None,
     target_table: Optional[str] = None,
@@ -47,10 +49,14 @@ def execute_dataset(
     """
     if not source_checksum:
         raise ValueError("source_checksum is required for incremental execution")
-    if not isinstance(source_dataframe, pd.DataFrame) or not isinstance(
+    if not isinstance(source_dataframe, pd.DataFrame):
+        raise TypeError("source_dataframe must be a pandas DataFrame")
+    if silver_dataframe is None and transform is None:
+        raise ValueError("Provide silver_dataframe or a transform callable")
+    if silver_dataframe is not None and not isinstance(
         silver_dataframe, pd.DataFrame
     ):
-        raise TypeError("source_dataframe and silver_dataframe must be DataFrames")
+        raise TypeError("silver_dataframe must be a pandas DataFrame")
     started = monotonic()
     checkpoint = metadata_store.get_checkpoint(dataset, source_uri)
     if checkpoint and checkpoint["source_checksum"] == source_checksum:
@@ -68,6 +74,10 @@ def execute_dataset(
     try:
         if validate:
             validate(source_dataframe)
+        if transform is not None:
+            silver_dataframe = transform(source_dataframe)
+        if not isinstance(silver_dataframe, pd.DataFrame):
+            raise TypeError("transform must return a pandas DataFrame")
 
         bronze = write_layer(
             source_dataframe, root=layer_root, layer="bronze", dataset=dataset,
@@ -134,7 +144,7 @@ def execute_dataset(
             "silver": silver["artifact_path"],
             "gold": gold["artifact_path"] if gold_dataframe is not None else None,
         }
-    except ValidationError as exc:
+    except (ValidationError, TransformError) as exc:
         dataset_runs.labels(status="failed").inc()
         quarantine_records.inc()
         try:
