@@ -22,6 +22,9 @@ For this repository, inspect the following before changing workflow commands:
    to run the complete test and Terraform checks on the selected branch.
 6. Re-run only failed jobs when logs show a transient infrastructure failure.
    Fix actual command/test failures in code and run the workflow again.
+7. Download the `ci-test-diagnostics` artifact from a completed CI run to inspect
+   the complete pytest log, JUnit XML results, and coverage report. The artifact is
+   uploaded even when the test command fails, when those files were produced.
 
 ## Workflow entry points
 

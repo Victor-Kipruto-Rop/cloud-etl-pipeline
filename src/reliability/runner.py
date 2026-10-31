@@ -105,6 +105,7 @@ def execute_dataset(
         )
     ):
         dataset_runs.labels(status="skipped").inc()
+        dataset_duration.observe(monotonic() - started)
         return {
             "status": "skipped",
             "run_id": checkpoint["committed_run_id"],
