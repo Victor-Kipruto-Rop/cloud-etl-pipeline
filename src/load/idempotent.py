@@ -80,17 +80,28 @@ def upsert_dataframe(engine: Engine, dataframe: pd.DataFrame, *, table_name: str
         f"SELECT {column_sql} FROM {stage_sql} WHERE 1=1 "
         f"ON CONFLICT ({key_sql}) {action}"
     )
+    batch_size = chunk_size
+    if engine.dialect.name == "sqlite":
+        batch_size = min(chunk_size, max(1, 900 // len(columns)))
+
     try:
         with engine.begin() as connection:
-            connection.execute(text(
-                f"CREATE TEMPORARY TABLE {stage_sql} AS "
-                f"SELECT {column_sql} FROM {target} WHERE 1=0"
-            ))
+            connection.execute(
+                text(
+                    f"CREATE TEMPORARY TABLE {stage_sql} AS "
+                    f"SELECT {column_sql} FROM {target} WHERE 1=0"
+                )
+            )
             prepared.to_sql(
-                stage_name, connection, if_exists="append", index=False,
-                chunksize=chunk_size, method="multi",
+                stage_name,
+                connection,
+                if_exists="append",
+                index=False,
+                chunksize=batch_size,
+                method="multi",
             )
             connection.execute(statement)
+            connection.execute(text(f"DROP TABLE {stage_sql}"))
         return len(prepared)
     except Exception as exc:
         raise IdempotentLoadError(f"Idempotent load into {table_name} failed") from exc
