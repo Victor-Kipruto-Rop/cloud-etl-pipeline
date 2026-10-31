@@ -46,7 +46,10 @@ def upsert_dataframe(engine: Engine, dataframe: pd.DataFrame, *, table_name: str
     inspector = inspect(engine)
     if not inspector.has_table(table_name, schema=schema):
         raise IdempotentLoadError(f"Target table does not exist: {table_name}")
-    target_columns = [column["name"] for column in inspector.get_columns(table_name, schema=schema)]
+    target_columns = [
+        column["name"]
+        for column in inspector.get_columns(table_name, schema=schema)
+    ]
     unknown = set(dataframe.columns) - set(target_columns)
     if unknown:
         raise IdempotentLoadError(f"Unknown target columns: {sorted(unknown)}")
@@ -55,7 +58,9 @@ def upsert_dataframe(engine: Engine, dataframe: pd.DataFrame, *, table_name: str
         else [column for column in dataframe.columns if column not in keys]
     )]
     if not set(updates).issubset(dataframe.columns) or set(updates) & set(keys):
-        raise ValueError("Update columns must be input columns and cannot be conflict keys")
+        raise ValueError(
+            "Update columns must be input columns and cannot be conflict keys"
+        )
 
     prepared = dataframe.drop_duplicates(subset=keys, keep="last")
     columns = list(prepared.columns)
