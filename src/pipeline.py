@@ -18,6 +18,7 @@ from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
 from src.load.staging_loader import upsert_from_staging
+from src.io_utils import write_dataframe_atomic
 from src.metrics.metrics import (
     files_failed,
     files_processed,
@@ -167,7 +168,7 @@ def process_file(
             # Save processed file
             out_file = PROCESSED_DIR / csv_file.name
             logger.info(f"Saving to {out_file}...")
-            df_transformed.to_csv(out_file, index=False)
+            write_dataframe_atomic(df_transformed, out_file)
             logger.info(f"Saved {len(df_transformed)} rows")
 
             # Load to database (optional, prefer COPY via engine if available)
