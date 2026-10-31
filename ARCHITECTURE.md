@@ -65,6 +65,27 @@
 
 ---
 
+## Incremental medallion execution
+
+The opt-in path is enabled with MEDALLION_PIPELINE_ENABLED=true and is implemented
+in src/reliability/entrypoint.py and src/reliability/runner.py.
+
+- Bronze: immutable run-scoped copy of the extracted source.
+- Silver: normalized and validated output from the transform stage.
+- Gold: optional curated output supplied by a downstream model; dbt provides the
+  sample warehouse fact model.
+- Metadata: SQLAlchemy-backed etl_runs, etl_checkpoints, etl_lineage, and
+  etl_quarantine tables.
+- Incremental rule: SHA-256 source checksums identify already committed inputs.
+  Checkpoints advance only after all configured artifacts and sinks succeed.
+- Warehouse writes: src/load/idempotent.py stages data and uses a business-key
+  conflict target inside a transaction. The destination unique constraint is required.
+- Recovery: failed source records remain visible in quarantine; replay restoration
+  copies the original file without marking it complete. Mark replayed only after success.
+
+Metadata can use SQLite for local development or PostgreSQL for shared execution.
+For production, use PostgreSQL or another durable shared metadata service rather than
+a container-local SQLite file.
 ## Component Breakdown
 
 ### 1. Extract Layer (`src/extract/extract_data.py`)
