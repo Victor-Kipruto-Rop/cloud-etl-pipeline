@@ -229,7 +229,7 @@ This supports fast correlation between a deploy, a rollback, and the resulting l
 
 ## Production readiness
 
-Read [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) before using this project for unattended workloads. The checklist separates implemented repository features from infrastructure and operational controls that still require deployment-specific implementation and evidence.
+Read [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) and the [ETL Operations Runbook](docs/OPERATIONS_RUNBOOK.md) before using this project for unattended workloads. The checklist separates implemented repository features from infrastructure and operational controls that still require deployment-specific implementation and evidence.
 
 ## Notes
 
