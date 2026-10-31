@@ -108,7 +108,13 @@ class MetadataStore:
             raise ValueError("row counts cannot be negative")
         now = utc_now()
         with self.engine.begin() as conn:
-            run = conn.execute(select(self.runs).where(self.runs.c.run_id == run_id)).mappings().first()
+            run = (
+                conn.execute(
+                    select(self.runs).where(self.runs.c.run_id == run_id)
+                )
+                .mappings()
+                .first()
+            )
             if run is None:
                 raise KeyError(f"Unknown run_id: {run_id}")
             if run["status"] != "running":
@@ -180,17 +186,23 @@ class MetadataStore:
             conn.execute(self.quarantine.insert().values(
                 record_id=record_id, run_id=run_id, dataset=dataset,
                 source_uri=source_uri, reason_code=reason_code,
-                reason_message=reason_message, payload_json=json.dumps(payload, default=str),
+                reason_message=reason_message,
+                payload_json=json.dumps(payload, default=str),
                 status="pending", created_at=utc_now(),
             ))
         return record_id
 
-    def list_quarantine(self, *, dataset: Optional[str] = None, status: str = "pending") -> list[dict[str, Any]]:
+    def list_quarantine(
+        self, *, dataset: Optional[str] = None, status: str = "pending"
+    ) -> list[dict[str, Any]]:
         query = select(self.quarantine).where(self.quarantine.c.status == status)
         if dataset:
             query = query.where(self.quarantine.c.dataset == dataset)
         with self.engine.connect() as conn:
-            return [dict(row) for row in conn.execute(query.order_by(self.quarantine.c.created_at)).mappings()]
+            rows = conn.execute(
+                query.order_by(self.quarantine.c.created_at)
+            ).mappings()
+            return [dict(row) for row in rows]
 
     def mark_replayed(self, record_id: str) -> None:
         with self.engine.begin() as conn:
@@ -203,7 +215,13 @@ class MetadataStore:
 
     def get_run(self, run_id: str) -> Optional[dict[str, Any]]:
         with self.engine.connect() as conn:
-            row = conn.execute(select(self.runs).where(self.runs.c.run_id == run_id)).mappings().first()
+            row = (
+                conn.execute(
+                    select(self.runs).where(self.runs.c.run_id == run_id)
+                )
+                .mappings()
+                .first()
+            )
             if not row:
                 return None
             result = dict(row)
