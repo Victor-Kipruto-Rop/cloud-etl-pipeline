@@ -44,7 +44,9 @@ def test_quarantine_and_lineage_are_persisted(tmp_path):
     pending = store.list_quarantine(dataset="orders")
     assert len(pending) == 1
     assert json.loads(pending[0]["payload_json"])["order_id"] == 7
-    store.mark_replayed(record_id)
+    replay_run = store.start_run("orders", "replayed-file.csv", "new-checksum")
+    store.finish_run(replay_run, rows_read=1, rows_written=1)
+    store.mark_replayed(record_id, replay_run)
     assert store.list_quarantine(dataset="orders") == []
 
 
