@@ -52,5 +52,6 @@ if os.getenv("DBT_ENABLED", "false").lower() == "true":
         ),
         env={"DBT_PROJECT_DIR": os.getenv("DBT_PROJECT_DIR", ".")},
         append_env=True,
+        dag=dag,
     )
     run_etl >> run_dbt
