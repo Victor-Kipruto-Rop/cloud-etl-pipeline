@@ -41,12 +41,17 @@ def upload_file(
     if not local_path.exists():
         raise FileNotFoundError(f"Local file not found: {local_path}")
 
+    upload_args = {"ServerSideEncryption": "AES256"}
+    upload_args.update(extra_args or {})
+    if "ACL" in upload_args:
+        raise ValueError("S3 object ACLs are disabled; use bucket policies and IAM")
+
     try:
         client.upload_file(
             str(local_path),
             bucket,
             key,
-            ExtraArgs=extra_args or {},
+            ExtraArgs=upload_args,
         )
         s3_uri = f"s3://{bucket}/{key}"
         logger.info(f"Uploaded {local_path} to {s3_uri}")
@@ -92,8 +97,13 @@ def upload_dataframe_as_parquet(
     df.to_parquet(buffer, index=False, compression=compression)
     buffer.seek(0)
 
+    upload_args = {"ServerSideEncryption": "AES256"}
+    upload_args.update(extra_args or {})
+    if "ACL" in upload_args:
+        raise ValueError("S3 object ACLs are disabled; use bucket policies and IAM")
+
     try:
-        client.upload_fileobj(buffer, bucket, key, ExtraArgs=extra_args or {})
+        client.upload_fileobj(buffer, bucket, key, ExtraArgs=upload_args)
         s3_uri = f"s3://{bucket}/{key}"
         logger.info(f"Uploaded DataFrame as Parquet to {s3_uri}")
         return s3_uri

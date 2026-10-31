@@ -1,0 +1,29 @@
+{
+  "required_columns": [
+    "order_id",
+    "customer_id",
+    "order_status"
+  ],
+  "min_rows": 1,
+  "max_null_ratio": {
+    "order_id": 0.0,
+    "customer_id": 0.0,
+    "order_status": 0.0
+  },
+  "unique_columns": [
+    "order_id"
+  ],
+  "allow_extra_columns": true,
+  "allowed_value_sets": {
+    "order_status": [
+      "created",
+      "approved",
+      "invoiced",
+      "processing",
+      "shipped",
+      "delivered",
+      "unavailable",
+      "canceled"
+    ]
+  }
+}

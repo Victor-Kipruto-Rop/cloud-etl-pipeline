@@ -15,18 +15,26 @@ A Python ETL repository that ingests Kaggle datasets, runs local extract/transfo
 - E-commerce analytics SQL in `analytics/ecommerce_queries.sql`
 - Warehouse schema DDL in `warehouse/schemas/*.sql`
 - Monitoring examples in `monitoring/`
-- A pytest-based test suite in `tests/`
+- Declarative data-quality contracts and a pytest-based test suite in `tests/`
+- Atomic CSV / Parquet artifact writes that preserve the last successful output if a write fails
+- Container hardening with a non-root runtime user and a Docker build-context ignore policy
+- Optional incremental medallion execution with checksum-based checkpoints, run metadata, lineage and quarantine
+- Immutable Bronze / Silver / Gold file partitions with SHA-256 manifests
+- Transactional, business-key-based PostgreSQL upserts and optional dbt warehouse models
+- Airflow DAG for the canonical pipeline entrypoint
 
 > Note: `terraform/` contains a Terraform root configuration and AWS provider file, but the referenced Terraform module sources are not included in this repository. The supported workflow is local development with optional AWS helper support.
 
-## Status
+## Engineering status
 
-- Local ETL and data ingestion are implemented in Python.
-- AWS S3 upload and optional Redshift helper methods exist, but full multi-service cloud provisioning is not available in this checkout.
-- `dags/` and `k8s/` provide deployment skeletons rather than a complete cloud production stack.
-- `.env` is a local configuration file that should not be committed.
-- Data directories under `data/` are excluded from version control and should be created locally.
-- This repository is best used for local pipeline development, testing, and Kaggle ingestion.
+- The standard local Python ETL path supports CSV extraction, transformation, validation, PostgreSQL loading, and operational metrics.
+- An opt-in incremental medallion path is available through MEDALLION_PIPELINE_ENABLED=true; it records checksums, run status, lineage and quarantine metadata.
+- AWS helpers support S3 artifact upload with server-side encryption defaults and optional Redshift COPY integration when correctly configured.
+- CSV and Parquet outputs are published atomically on the local filesystem. A failed write does not replace the previous completed artifact.
+- Docker now runs the ETL process as a non-root user and excludes local datasets, logs, and credentials from the build context.
+- `dags/`, `k8s/`, and parts of `terraform/` are deployment examples or scaffolds. They must be validated and completed in the target AWS account before use.
+- This repository is not certified production-ready. Review [Production Readiness](docs/PRODUCTION_READINESS.md) for the controls and evidence required before a production launch.
+- Never commit `.env`, Kaggle credentials, cloud credentials, or customer datasets.
 
 ## Quick Start
 
@@ -77,6 +85,80 @@ This command downloads the specified Kaggle dataset, processes CSV files, writes
 .venv/bin/python3 -m pytest -q
 ```
 
+## Incremental medallion pipeline
+
+The existing single-stage flow remains the default. To enable the new incremental
+execution path, set the following in `.env`:
+
+```dotenv
+MEDALLION_PIPELINE_ENABLED=true
+MEDALLION_ROOT=data/lake
+MEDALLION_FILE_FORMAT=parquet
+METADATA_DATABASE_URL=sqlite:///data/metadata/etl_metadata.db
+AWS_S3_BUCKET=your-private-data-lake
+S3_DATA_PREFIX=
+AWS_REGION=af-south-1
+```
+
+Run the pipeline with:
+
+```bash
+python -m src.pipeline
+```
+
+The medallion runner writes immutable run-scoped Bronze and Silver artifacts and
+stores their manifests and checksums. When `AWS_S3_BUCKET` is configured, it also
+uploads each layer artifact and manifest to the configured S3 prefix using the
+repository's server-side-encryption defaults. Keep the prefix empty when using the
+provided Terraform IAM policy, or extend that policy for a custom prefix. A source with an already committed checksum and matching contract / transform
+version is skipped. Bump `TRANSFORM_VERSION` when transformation logic changes to
+force a safe reprocessing of unchanged source files. The checkpoint advances only
+after artifact publication and any configured database sink complete successfully.
+
+To enable a transactional database sink, configure all of:
+
+```dotenv
+DATABASE_URL=postgresql+psycopg2://etl_user:replace-me@localhost:5432/etl_db
+TARGET_SCHEMA=raw
+TARGET_TABLE=orders
+UPSERT_KEY_COLUMNS=order_id
+```
+
+For the sample Olist orders flow, create the matching raw landing table first:
+
+```bash
+PGHOST=your-db-host PGUSER=etl_user PGDATABASE=etl_db psql -v ON_ERROR_STOP=1 -f warehouse/schemas/raw_orders.sql
+```
+
+The target table and a matching unique/primary-key constraint must exist before
+the first run. Use a stable business key; do not guess one from row position.
+`METADATA_DATABASE_URL` may point to a separate durable metadata database.
+
+Set `DATA_QUALITY_CONTRACT_PATH` to a JSON contract such as
+`config/contracts/ecommerce_orders.json` to enforce required fields, null thresholds,
+business-key uniqueness and allowed values before publishing Bronze / Silver data.
+Leave it empty for datasets that use only `REQUIRED_COLUMNS`.
+
+The metadata store tracks `etl_runs`, `etl_checkpoints`, `etl_lineage`, and
+`etl_quarantine`. A failed run does not advance its checkpoint. Quarantine
+restoration is explicit through `src.reliability.replay`; records should be marked
+replayed only after the normal processing path and sink commit succeed.
+
+### dbt warehouse models
+
+Install the optional analytics toolchain with `pip install -r requirements-dbt.txt`.
+Copy `dbt/profiles.yml.example` to `~/.dbt/profiles.yml`, set the `DBT_PG_*`
+environment variables, then run `dbt debug`, `dbt run`, and `dbt test` from the
+repository root. The sample source contract expects `raw.orders`; align it with
+your actual raw schema before running against a real warehouse.
+## Reliability and operational controls
+
+- Atomic local artifact publication for CSV and Parquet outputs
+- Data-quality contracts for required fields, null thresholds, uniqueness, minimum row counts, and allowed values
+- CI compilation checks and targeted regression tests for output-write failure handling
+- Non-root Docker runtime and build-context exclusions for local data and secrets
+- Explicit production-readiness gates covering idempotency, replay, quarantine, IAM, monitoring, backup restoration, and release approvals
+
 ## Supported workflows
 
 - `ingest/`: dataset download and ingestion orchestration
@@ -85,7 +167,8 @@ This command downloads the specified Kaggle dataset, processes CSV files, writes
 - `src/cloud/aws_etl.py`: AWS helper orchestration
 - `src/cloud/aws_s3.py`: S3 upload utilities
 - `src/cloud/aws_redshift.py`: Redshift load helper
-- `dags/`: Airflow DAG skeleton for ecommerce ETL orchestration
+- `dags/cloud_etl_pipeline.py`: Airflow DAG for the canonical pipeline entrypoint
+- `dbt/`: optional dbt staging and mart models (requires source table `raw.orders`)
 - `k8s/`: Kubernetes ETL job manifest skeleton
 
 ## Project structure
@@ -215,6 +298,10 @@ Grafana annotations should be configured for both deploys and rollbacks so each 
 - environment-level release markers annotated with the image tag and approver
 
 This supports fast correlation between a deploy, a rollback, and the resulting latency, failure, or data freshness signals.
+
+## Production readiness
+
+Read [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) and the [ETL Operations Runbook](docs/OPERATIONS_RUNBOOK.md) before using this project for unattended workloads. The checklist separates implemented repository features from infrastructure and operational controls that still require deployment-specific implementation and evidence.
 
 ## Notes
 

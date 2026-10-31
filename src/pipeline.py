@@ -3,10 +3,9 @@ import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Event
 from datetime import datetime
 from pathlib import Path
-from threading import Lock
+from threading import Event, Lock
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -15,18 +14,18 @@ from src.config import get_config
 from src.dashboard import generate_dashboard
 from src.extract.extract_data import ExtractionError, extract_csv
 from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
+from src.io_utils import write_dataframe_atomic
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
 from src.load.staging_loader import upsert_from_staging
 from src.metrics.metrics import (
     files_failed,
     files_processed,
-)
-from src.metrics.metrics import rows_extracted as metric_rows_extracted
-from src.metrics.metrics import rows_loaded as metric_rows_loaded
-from src.metrics.metrics import (
+    rows_extracted as metric_rows_extracted,
+    rows_loaded as metric_rows_loaded,
     start_metrics_server,
 )
+from src.reliability.entrypoint import run_medallion_files
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
@@ -167,7 +166,7 @@ def process_file(
             # Save processed file
             out_file = PROCESSED_DIR / csv_file.name
             logger.info(f"Saving to {out_file}...")
-            df_transformed.to_csv(out_file, index=False)
+            write_dataframe_atomic(df_transformed, out_file)
             logger.info(f"Saved {len(df_transformed)} rows")
 
             # Load to database (optional, prefer COPY via engine if available)
@@ -188,7 +187,8 @@ def process_file(
                         loaded = load_df_to_postgres(df_transformed, csv_file.stem)
                     stats.incr(rows_loaded=loaded)
                 except LoadError as e:
-                    logger.warning(f"Database load skipped: {e}")
+                    logger.error(f"Required database load failed: {e}")
+                    raise
             else:
                 logger.debug(
                     "POSTGRES_HOST not set and no DATABASE_URL, skipping database load"
@@ -210,9 +210,9 @@ def process_file(
                 # move offending file to quarantine
                 quarantine = RAW_DIR / "quarantine"
                 quarantine.mkdir(parents=True, exist_ok=True)
-                target = (
-                    quarantine
-                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                target = quarantine / (
+                    f"{csv_file.stem}_{int(datetime.now().timestamp())}"
+                    f"{csv_file.suffix}"
                 )
                 try:
                     csv_file.replace(target)
@@ -229,9 +229,9 @@ def process_file(
             try:
                 quarantine = RAW_DIR / "quarantine"
                 quarantine.mkdir(parents=True, exist_ok=True)
-                target = (
-                    quarantine
-                    / f"{csv_file.stem}_{int(datetime.now().timestamp())}{csv_file.suffix}"
+                target = quarantine / (
+                    f"{csv_file.stem}_{int(datetime.now().timestamp())}"
+                    f"{csv_file.suffix}"
                 )
                 csv_file.replace(target)
                 logger.info(f"Moved unexpected-failure file to quarantine: {target}")
@@ -319,6 +319,15 @@ def run(cancel_event: Event | None = None):
         logger.warning(f"No CSV files found in {RAW_DIR}")
         return True
 
+    if os.getenv("MEDALLION_PIPELINE_ENABLED", "false").lower() == "true":
+        logger.info("Running incremental medallion pipeline")
+        if engine is not None:
+            engine.dispose()
+        return run_medallion_files(
+            csv_files,
+            layer_root=os.getenv("MEDALLION_ROOT", "data/lake"),
+        )
+
     logger.info(f"Found {len(csv_files)} CSV file(s) to process:")
     for f in csv_files:
         logger.info(f"  - {f.name}")
@@ -378,8 +387,12 @@ def run(cancel_event: Event | None = None):
     logger.info(f"ETL PIPELINE COMPLETED in {duration:.1f}s")
     logger.info("=" * 80 + "\n")
 
-    # Return success if no critical failures
-    return stats.files_failed == 0
+    if engine is not None:
+        engine.dispose()
+
+    return stats.files_failed == 0 and not (
+        cancel_event is not None and cancel_event.is_set()
+    )
 
 
 if __name__ == "__main__":

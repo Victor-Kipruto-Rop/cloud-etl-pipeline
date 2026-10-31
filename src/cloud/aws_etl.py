@@ -13,6 +13,7 @@ from src.cloud.aws_redshift import load_dataframe_to_redshift
 from src.cloud.aws_s3 import upload_dataframe_as_parquet, upload_directory, upload_file
 from src.extract.extract_data import ExtractionError, extract_csv
 from src.extract.kaggle_data import download_kaggle_dataset
+from src.io_utils import write_dataframe_atomic
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
 
@@ -69,6 +70,8 @@ def run_aws_etl() -> bool:
         return False
 
     logger.info(f"Found {len(csv_files)} CSV file(s) to process")
+    successful_files = 0
+    failed_files = 0
 
     for csv_file in csv_files:
         logger.info(f"Processing {csv_file.name}")
@@ -81,7 +84,9 @@ def run_aws_etl() -> bool:
             )
 
             output_path = processed_dir / f"{csv_file.stem}.parquet"
-            df_transformed.to_parquet(output_path, index=False, compression="snappy")
+            write_dataframe_atomic(
+                df_transformed, output_path, compression="snappy"
+            )
             logger.info(f"Wrote processed Parquet to {output_path}")
 
             upload_file(
@@ -108,8 +113,10 @@ def run_aws_etl() -> bool:
                     region=region,
                     schema=os.getenv("REDSHIFT_SCHEMA", "public"),
                 )
+            successful_files += 1
 
         except (ExtractionError, ValidationError, TransformError, ValueError) as exc:
+            failed_files += 1
             logger.error(f"Failed to process {csv_file.name}: {exc}")
             continue
 
@@ -121,7 +128,7 @@ def run_aws_etl() -> bool:
     ):
         logger.warning("No raw files uploaded to S3")
 
-    return True
+    return successful_files > 0 and failed_files == 0
 
 
 if __name__ == "__main__":

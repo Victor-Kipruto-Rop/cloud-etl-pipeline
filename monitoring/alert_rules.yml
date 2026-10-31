@@ -90,3 +90,21 @@ groups:
         annotations:
           summary: "ETL service is consuming the SLO error budget"
           description: "The pipeline is above the allowable failure ratio for the SLO policy. Reduce failures or escalate to incident response."
+
+      - alert: ETLMedallionDatasetFailures
+        expr: increase(etl_dataset_runs_total{status="failed"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Incremental medallion dataset execution failed"
+          description: "At least one dataset run failed in the last 15 minutes. Inspect etl_runs and etl_quarantine before replay."
+
+      - alert: ETLQuarantineGrowing
+        expr: increase(etl_quarantine_records_total[30m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "New data was quarantined"
+          description: "One or more dataset envelopes entered quarantine. Review reason codes and replay only after correcting the underlying issue."

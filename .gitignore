@@ -12,3 +12,16 @@ data/*
 !data/processed/.gitkeep
 !data/analytics/.gitkeep
 logs/*
+
+
+
+# Incremental medallion runtime artifacts
+data/lake/
+data/metadata/
+*.sqlite
+*.sqlite3
+
+# dbt build artifacts
+target/
+dbt_packages/
+logs/dbt.log

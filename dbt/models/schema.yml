@@ -1,0 +1,21 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: Cleaned, normalized and deduplicated order records.
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
+      - name: order_status
+        tests:
+          - accepted_values:
+              values: ['created', 'approved', 'invoiced', 'shipped', 'delivered', 'canceled', 'unavailable', 'processing']
+  - name: fct_orders
+    description: Gold-level order fact table with delivery performance indicators.
+    columns:
+      - name: order_id
+        tests: [not_null, unique]
+      - name: customer_id
+        tests: [not_null]
