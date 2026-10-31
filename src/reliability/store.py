@@ -204,14 +204,37 @@ class MetadataStore:
             ).mappings()
             return [dict(row) for row in rows]
 
-    def mark_replayed(self, record_id: str) -> None:
+    def mark_replayed(self, record_id: str, replay_run_id: str) -> None:
+        """Mark quarantine resolved only after a successful run for the same dataset."""
         with self.engine.begin() as conn:
-            result = conn.execute(update(self.quarantine).where(
-                self.quarantine.c.record_id == record_id,
-                self.quarantine.c.status == "pending",
-            ).values(status="replayed", replayed_at=utc_now()))
-            if result.rowcount != 1:
+            record = conn.execute(
+                select(self.quarantine).where(
+                    self.quarantine.c.record_id == record_id,
+                    self.quarantine.c.status == "pending",
+                )
+            ).mappings().first()
+            if record is None:
                 raise KeyError(f"Unknown or already replayed record: {record_id}")
+            replay_run = conn.execute(
+                select(self.runs).where(self.runs.c.run_id == replay_run_id)
+            ).mappings().first()
+            if (
+                replay_run is None
+                or replay_run["status"] != "succeeded"
+                or replay_run["dataset"] != record["dataset"]
+            ):
+                raise ValueError(
+                    "Replay record can be resolved only by a successful run "
+                    "for the same dataset"
+                )
+            conn.execute(
+                update(self.quarantine)
+                .where(
+                    self.quarantine.c.record_id == record_id,
+                    self.quarantine.c.status == "pending",
+                )
+                .values(status="replayed", replayed_at=utc_now())
+            )
 
     def get_run(self, run_id: str) -> Optional[dict[str, Any]]:
         with self.engine.connect() as conn:
