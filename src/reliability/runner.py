@@ -72,7 +72,7 @@ def execute_dataset(
     target_schema: Optional[str] = None,
     conflict_columns: tuple[str, ...] = (),
     s3_bucket: Optional[str] = None,
-    s3_prefix: str = "data-lake",
+    s3_prefix: str = "",
     aws_region: Optional[str] = None,
     file_format: str = "parquet",
 ) -> dict:
