@@ -17,8 +17,8 @@ from src.extract.extract_data import ExtractionError, extract_csv
 from src.extract.kaggle_data import KaggleDownloadError, download_kaggle_dataset
 from src.load.copy_loader import copy_from_df
 from src.load.load_to_db import LoadError, load_df_to_postgres
-from src.load.staging_loader import upsert_from_staging
 from src.io_utils import write_dataframe_atomic
+from src.load.staging_loader import upsert_from_staging
 from src.metrics.metrics import (
     files_failed,
     files_processed,
