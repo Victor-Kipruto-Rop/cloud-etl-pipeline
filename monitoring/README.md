@@ -30,6 +30,10 @@ Current ETL metric names:
 - `etl_rows_extracted_total`
 - `etl_rows_loaded_total`
 - `etl_current_in_progress`
+- `etl_dataset_runs_total` (labels: status)
+- `etl_dataset_rows_total` (labels: layer)
+- `etl_quarantine_records_total`
+- `etl_dataset_duration_seconds`
 
 Provisioned dashboards
 - `etl-dashboard.json` — ETL-specific counters: files processed, files failed, rows loaded rate.
