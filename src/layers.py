@@ -47,7 +47,13 @@ def write_layer(dataframe: pd.DataFrame, *, root, layer: str, dataset: str,
     day = ingestion_date or datetime.now(timezone.utc).date()
     if isinstance(day, str):
         day = date.fromisoformat(day)
-    partition = Path(root) / layer / dataset / f"ingestion_date={day.isoformat()}" / f"run_id={run_id}"
+    partition = (
+        Path(root)
+        / layer
+        / dataset
+        / f"ingestion_date={day.isoformat()}"
+        / f"run_id={run_id}"
+    )
     artifact = partition / f"data.{file_format}"
     if artifact.exists() or (partition / "manifest.json").exists():
         raise FileExistsError(f"Run output already exists: {partition}")
@@ -66,7 +72,11 @@ def write_layer(dataframe: pd.DataFrame, *, root, layer: str, dataset: str,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _write_manifest(partition / "manifest.json", manifest)
-    return {"artifact_path": str(artifact), "manifest_path": str(partition / "manifest.json"), **manifest}
+    return {
+        "artifact_path": str(artifact),
+        "manifest_path": str(partition / "manifest.json"),
+        **manifest,
+    }
 
 
 def read_manifest(path) -> dict:
