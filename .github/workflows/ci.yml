@@ -65,6 +65,9 @@ jobs:
       - name: Import sort check with isort
         run: isort --check-only src tests
 
+      - name: Compile Python modules
+        run: python -m compileall -q src ingest etl tests
+
       - name: Run tests with pytest
         env:
           POSTGRES_HOST: localhost
@@ -73,8 +76,7 @@ jobs:
           POSTGRES_DB: etl_db
           PYTHONPATH: .
         run: |
-          pytest -q tests/test_validation.py tests/test_validation_required_columns.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py
-          pytest tests/test_perf_copy.py -q || true
+          pytest -q tests/test_validation.py tests/test_validation_required_columns.py tests/test_api_module.py tests/test_production_orchestration.py tests/test_pipeline.py tests/test_further_coverage.py tests/test_io_utils.py
 
       - name: Smoke test application health
         env:
