@@ -9,6 +9,7 @@ from typing import Callable, Optional
 import pandas as pd
 from sqlalchemy.engine import Engine
 
+from src.cloud.aws_s3 import upload_file
 from src.layers import write_layer
 from src.load.idempotent import upsert_dataframe
 from src.reliability.metrics import (
@@ -22,6 +23,36 @@ from src.transform.transform_data import TransformError
 from src.validation import ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+def _upload_layer(
+    layer_result: dict,
+    *,
+    bucket: str,
+    prefix: str,
+    region: Optional[str],
+) -> list[str]:
+    """Upload a layer artifact and its manifest using encrypted S3 helper defaults."""
+    base_parts = [
+        prefix.strip("/"),
+        layer_result["layer"],
+        layer_result["dataset"],
+        f"ingestion_date={layer_result['ingestion_date']}",
+        f"run_id={layer_result['run_id']}",
+    ]
+    base_key = "/".join(part for part in base_parts if part)
+    uploaded = []
+    for field in ("artifact_path", "manifest_path"):
+        path = Path(layer_result[field])
+        uploaded.append(
+            upload_file(
+                path,
+                bucket,
+                f"{base_key}/{path.name}",
+                region_name=region,
+            )
+        )
+    return uploaded
 
 
 def execute_dataset(
@@ -40,6 +71,9 @@ def execute_dataset(
     target_table: Optional[str] = None,
     target_schema: Optional[str] = None,
     conflict_columns: tuple[str, ...] = (),
+    s3_bucket: Optional[str] = None,
+    s3_prefix: str = "data-lake",
+    aws_region: Optional[str] = None,
     file_format: str = "parquet",
 ) -> dict:
     """Run one dataset and commit its checkpoint only after every required sink.
@@ -89,6 +123,15 @@ def execute_dataset(
             parent_uri=source_uri, child_uri=bronze["artifact_path"],
             details={"rows": len(source_dataframe), "sha256": bronze["sha256"]},
         )
+        if s3_bucket:
+            bronze_uris = _upload_layer(
+                bronze, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+            )
+            metadata_store.record_lineage(
+                run_id, dataset, "bronze_uploaded",
+                parent_uri=bronze["artifact_path"], child_uri=bronze_uris[0],
+                details={"manifest_uri": bronze_uris[1]},
+            )
 
         silver = write_layer(
             silver_dataframe, root=layer_root, layer="silver", dataset=dataset,
@@ -100,6 +143,15 @@ def execute_dataset(
             parent_uri=bronze["artifact_path"], child_uri=silver["artifact_path"],
             details={"rows": len(silver_dataframe), "sha256": silver["sha256"]},
         )
+        if s3_bucket:
+            silver_uris = _upload_layer(
+                silver, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+            )
+            metadata_store.record_lineage(
+                run_id, dataset, "silver_uploaded",
+                parent_uri=silver["artifact_path"], child_uri=silver_uris[0],
+                details={"manifest_uri": silver_uris[1]},
+            )
 
         if gold_dataframe is not None:
             gold = write_layer(
@@ -112,6 +164,15 @@ def execute_dataset(
                 parent_uri=silver["artifact_path"], child_uri=gold["artifact_path"],
                 details={"rows": len(gold_dataframe), "sha256": gold["sha256"]},
             )
+            if s3_bucket:
+                gold_uris = _upload_layer(
+                    gold, bucket=s3_bucket, prefix=s3_prefix, region=aws_region
+                )
+                metadata_store.record_lineage(
+                    run_id, dataset, "gold_uploaded",
+                    parent_uri=gold["artifact_path"], child_uri=gold_uris[0],
+                    details={"manifest_uri": gold_uris[1]},
+                )
 
         loaded_rows = len(silver_dataframe)
         if database_engine is not None:
