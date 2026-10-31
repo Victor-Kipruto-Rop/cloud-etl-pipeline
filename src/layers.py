@@ -73,12 +73,18 @@ def write_layer(
         write_dataframe_atomic(dataframe, artifact)
     checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
     manifest = {
-        "layer": layer, "dataset": dataset, "run_id": run_id,
-        "ingestion_date": day.isoformat(), "artifact": artifact.name,
-        "format": file_format, "row_count": int(len(dataframe)),
+        "layer": layer,
+        "dataset": dataset,
+        "run_id": run_id,
+        "ingestion_date": day.isoformat(),
+        "artifact": artifact.name,
+        "format": file_format,
+        "row_count": int(len(dataframe)),
         "column_names": [str(column) for column in dataframe.columns],
-        "sha256": checksum, "source_uri": source_uri,
-        "source_checksum": source_checksum, "schema_version": schema_version,
+        "sha256": checksum,
+        "source_uri": source_uri,
+        "source_checksum": source_checksum,
+        "schema_version": schema_version,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _write_manifest(partition / "manifest.json", manifest)
