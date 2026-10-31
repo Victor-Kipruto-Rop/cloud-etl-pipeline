@@ -103,7 +103,8 @@ def execute_dataset(
         if database_engine is not None:
             if not target_table or not conflict_columns:
                 raise ValueError(
-                    "target_table and conflict_columns are required when a database sink is configured"
+                    "target_table and conflict_columns are required when a "
+                    "database sink is configured"
                 )
             loaded_rows = upsert_dataframe(
                 database_engine, silver_dataframe, table_name=target_table,
@@ -136,7 +137,10 @@ def execute_dataset(
             metadata_store.quarantine_record(
                 run_id, dataset, source_uri, "DATASET_EXECUTION_FAILED",
                 str(exc),
-                {"source_checksum": source_checksum, "exception_type": type(exc).__name__},
+                {
+                    "source_checksum": source_checksum,
+                    "exception_type": type(exc).__name__,
+                },
             )
             metadata_store.fail_run(run_id, str(exc))
         except Exception:
