@@ -52,6 +52,11 @@ resource "aws_s3_bucket_lifecycle_configuration" "data_lake" {
         days = var.bronze_expiration_days
       }
     }
+  }
+  rule {
+    id     = "noncurrent-version-retention"
+    status = "Enabled"
+    filter {}
     noncurrent_version_expiration {
       noncurrent_days = var.noncurrent_version_expiration_days
     }
