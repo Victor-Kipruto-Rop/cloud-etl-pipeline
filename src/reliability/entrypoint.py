@@ -8,6 +8,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 
 from src.extract.extract_data import extract_csv
+from src.reliability.metrics import dataset_runs, quarantine_records
 from src.reliability.runner import execute_dataset
 from src.reliability.store import MetadataStore
 from src.transform.transform_data import transform
@@ -89,13 +90,45 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
     try:
         for source in files:
             source = Path(source)
+            source_uri = str(source.resolve())
             try:
-                source_df = extract_csv(source)
+                source_checksum = _checksum(source)
+                try:
+                    source_df = extract_csv(source)
+                except Exception as exc:
+                    run_id = store.start_run(
+                        source.stem,
+                        source_uri=source_uri,
+                        source_checksum=source_checksum,
+                        metadata={"source_version": source_version},
+                    )
+                    dataset_runs.labels(status="failed").inc()
+                    quarantine_records.inc()
+                    try:
+                        store.quarantine_record(
+                            run_id,
+                            source.stem,
+                            source_uri,
+                            "SOURCE_EXTRACTION_FAILURE",
+                            str(exc),
+                            {
+                                "source_checksum": source_checksum,
+                                "exception_type": type(exc).__name__,
+                            },
+                        )
+                    except Exception:
+                        logger.exception("Could not persist extraction quarantine record")
+                    try:
+                        store.fail_run(run_id, str(exc))
+                    except Exception:
+                        logger.exception("Could not mark extraction run as failed")
+                    raise
+
                 result = execute_dataset(
                     source_df,
                     dataset=source.stem,
-                    source_uri=str(source.resolve()),
-                    source_checksum=_checksum(source),
+                    source_uri=source_uri,
+                    source_checksum=source_checksum,
                     source_version=source_version,
                     metadata_store=store,
                     layer_root=layer_root,
