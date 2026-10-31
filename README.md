@@ -110,9 +110,10 @@ The medallion runner writes immutable run-scoped Bronze and Silver artifacts and
 stores their manifests and checksums. When `AWS_S3_BUCKET` is configured, it also
 uploads each layer artifact and manifest to the configured S3 prefix using the
 repository's server-side-encryption defaults. Keep the prefix empty when using the
-provided Terraform IAM policy, or extend that policy for a custom prefix. A source with an already committed checksum
-is skipped. The checkpoint advances only after artifact publication and any
-configured database sink complete successfully.
+provided Terraform IAM policy, or extend that policy for a custom prefix. A source with an already committed checksum and matching contract / transform
+version is skipped. Bump `TRANSFORM_VERSION` when transformation logic changes to
+force a safe reprocessing of unchanged source files. The checkpoint advances only
+after artifact publication and any configured database sink complete successfully.
 
 To enable a transactional database sink, configure all of:
 
