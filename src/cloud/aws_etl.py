@@ -70,6 +70,8 @@ def run_aws_etl() -> bool:
         return False
 
     logger.info(f"Found {len(csv_files)} CSV file(s) to process")
+    successful_files = 0
+    failed_files = 0
 
     for csv_file in csv_files:
         logger.info(f"Processing {csv_file.name}")
@@ -111,8 +113,10 @@ def run_aws_etl() -> bool:
                     region=region,
                     schema=os.getenv("REDSHIFT_SCHEMA", "public"),
                 )
+            successful_files += 1
 
         except (ExtractionError, ValidationError, TransformError, ValueError) as exc:
+            failed_files += 1
             logger.error(f"Failed to process {csv_file.name}: {exc}")
             continue
 
@@ -124,7 +128,7 @@ def run_aws_etl() -> bool:
     ):
         logger.warning("No raw files uploaded to S3")
 
-    return True
+    return successful_files > 0 and failed_files == 0
 
 
 if __name__ == "__main__":
