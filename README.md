@@ -121,6 +121,11 @@ The target table and a matching unique/primary-key constraint must exist before
 the first run. Use a stable business key; do not guess one from row position.
 `METADATA_DATABASE_URL` may point to a separate durable metadata database.
 
+Set `DATA_QUALITY_CONTRACT_PATH` to a JSON contract such as
+`config/contracts/ecommerce_orders.json` to enforce required fields, null thresholds,
+business-key uniqueness and allowed values before publishing Bronze / Silver data.
+Leave it empty for datasets that use only `REQUIRED_COLUMNS`.
+
 The metadata store tracks `etl_runs`, `etl_checkpoints`, `etl_lineage`, and
 `etl_quarantine`. A failed run does not advance its checkpoint. Quarantine
 restoration is explicit through `src.reliability.replay`; records should be marked
