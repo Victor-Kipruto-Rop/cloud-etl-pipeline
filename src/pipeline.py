@@ -390,7 +390,9 @@ def run(cancel_event: Event | None = None):
     if engine is not None:
         engine.dispose()
 
-    return stats.files_failed == 0
+    return stats.files_failed == 0 and not (
+        cancel_event is not None and cancel_event.is_set()
+    )
 
 
 if __name__ == "__main__":
