@@ -78,11 +78,12 @@ def upsert_dataframe(
     key_sql = ", ".join(quote(column) for column in keys)
     stage_name = f"etl_stage_{uuid.uuid4().hex}"
     stage_sql = quote(stage_name)
-    action = (
-        "DO UPDATE SET " + ", ".join(
+    if updates:
+        action = "DO UPDATE SET " + ", ".join(
             f"{quote(column)} = EXCLUDED.{quote(column)}" for column in updates
-        ) if updates else "DO NOTHING"
-    )
+        )
+    else:
+        action = "DO NOTHING"
     statement = text(
         f"INSERT INTO {target} ({column_sql}) "
         f"SELECT {column_sql} FROM {stage_sql} WHERE 1=1 "
