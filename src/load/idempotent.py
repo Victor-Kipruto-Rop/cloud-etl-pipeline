@@ -60,10 +60,11 @@ def upsert_dataframe(
     unknown = set(dataframe.columns) - set(target_columns)
     if unknown:
         raise IdempotentLoadError(f"Unknown target columns: {sorted(unknown)}")
-    updates = [_identifier(column) for column in (
-        update_columns if update_columns is not None
-        else [column for column in dataframe.columns if column not in keys]
-    )]
+    if update_columns is None:
+        updates = [column for column in dataframe.columns if column not in keys]
+    else:
+        updates = list(update_columns)
+    updates = [_identifier(column) for column in updates]
     if not set(updates).issubset(dataframe.columns) or set(updates) & set(keys):
         raise ValueError(
             "Update columns must be input columns and cannot be conflict keys"
