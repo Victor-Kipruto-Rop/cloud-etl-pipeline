@@ -126,7 +126,7 @@ UPSERT_KEY_COLUMNS=order_id
 For the sample Olist orders flow, create the matching raw landing table first:
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f warehouse/schemas/raw_orders.sql
+PGHOST=your-db-host PGUSER=etl_user PGDATABASE=etl_db psql -v ON_ERROR_STOP=1 -f warehouse/schemas/raw_orders.sql
 ```
 
 The target table and a matching unique/primary-key constraint must exist before
