@@ -3,9 +3,11 @@
 The Airflow worker image must include this repository and runtime dependencies.
 Supply credentials through Airflow Connections or workload identity, not DAG code.
 """
+import os
 from datetime import datetime, timedelta
 
 from airflow import DAG
+from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
 
 
@@ -40,3 +42,15 @@ with DAG(
         python_callable=execute_pipeline,
         do_xcom_push=False,
     )
+
+if os.getenv("DBT_ENABLED", "false").lower() == "true":
+    run_dbt = BashOperator(
+        task_id="dbt_run_and_test",
+        bash_command=(
+            'dbt run --project-dir "$DBT_PROJECT_DIR" && '
+            'dbt test --project-dir "$DBT_PROJECT_DIR"'
+        ),
+        env={"DBT_PROJECT_DIR": os.getenv("DBT_PROJECT_DIR", ".")},
+        append_env=True,
+    )
+    run_etl >> run_dbt
