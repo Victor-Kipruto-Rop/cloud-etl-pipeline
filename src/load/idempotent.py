@@ -20,9 +20,16 @@ def _identifier(value: str) -> str:
     return value
 
 
-def upsert_dataframe(engine: Engine, dataframe: pd.DataFrame, *, table_name: str,
-                     conflict_columns: Sequence[str], update_columns=None,
-                     schema: str | None = None, chunk_size: int = 5000) -> int:
+def upsert_dataframe(
+    engine: Engine,
+    dataframe: pd.DataFrame,
+    *,
+    table_name: str,
+    conflict_columns: Sequence[str],
+    update_columns=None,
+    schema: str | None = None,
+    chunk_size: int = 5000,
+) -> int:
     """Upsert by business key in one transaction; duplicate input keys keep last row.
 
     The target table and matching unique/primary-key constraint must already exist.
