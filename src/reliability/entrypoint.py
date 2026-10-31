@@ -133,6 +133,7 @@ def run_medallion_files(files, *, layer_root="data/lake") -> bool:
                     metadata_store=store,
                     layer_root=layer_root,
                     validate=validate_source,
+                    validate_source=validate_source,
                     transform=lambda frame: transform(
                         frame, normalize_cols=True, handle_missing="drop_all"
                     ),

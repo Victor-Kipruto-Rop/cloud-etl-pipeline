@@ -66,6 +66,7 @@ def execute_dataset(
     metadata_store: MetadataStore,
     layer_root: str | Path,
     validate: Optional[Callable[[pd.DataFrame], None]] = None,
+    validate_source: Optional[Callable[[pd.DataFrame], None]] = None,
     transform: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
     gold_dataframe: Optional[pd.DataFrame] = None,
     database_engine: Optional[Engine] = None,
@@ -79,8 +80,9 @@ def execute_dataset(
 ) -> dict:
     """Run one dataset and commit its checkpoint only after every required sink.
 
-    A matching successful checksum is skipped. All failures enter the run ledger;
-    data-quality failures also enter quarantine for controlled replay.
+    A matching successful checksum is skipped. validate_source checks the
+    extracted Bronze input; validate checks the transformed Silver output.
+    All failures enter the run ledger; data-quality failures enter quarantine.
     """
     if not source_checksum:
         raise ValueError("source_checksum is required for incremental execution")
@@ -103,7 +105,6 @@ def execute_dataset(
         )
     ):
         dataset_runs.labels(status="skipped").inc()
-        dataset_duration.observe(monotonic() - started)
         return {
             "status": "skipped",
             "run_id": checkpoint["committed_run_id"],
@@ -117,12 +118,14 @@ def execute_dataset(
         metadata={"source_version": source_version},
     )
     try:
-        if validate:
-            validate(source_dataframe)
+        if validate_source:
+            validate_source(source_dataframe)
         if transform is not None:
             silver_dataframe = transform(source_dataframe)
         if not isinstance(silver_dataframe, pd.DataFrame):
             raise TypeError("transform must return a pandas DataFrame")
+        if validate:
+            validate(silver_dataframe)
 
         bronze = write_layer(
             source_dataframe,

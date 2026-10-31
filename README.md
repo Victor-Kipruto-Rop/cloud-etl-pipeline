@@ -33,7 +33,7 @@ A Python ETL repository that ingests Kaggle datasets, runs local extract/transfo
 - CSV and Parquet outputs are published atomically on the local filesystem. A failed write does not replace the previous completed artifact.
 - Docker now runs the ETL process as a non-root user and excludes local datasets, logs, and credentials from the build context.
 - `dags/`, `k8s/`, and parts of `terraform/` are deployment examples or scaffolds. They must be validated and completed in the target AWS account before use.
-- This repository is not certified production-ready. Review [Production Readiness](docs/PRODUCTION_READINESS.md) for the controls and evidence required before a production launch.
+- This repository is not certified production-ready. Review [Production Readiness](docs/PRODUCTION_READINESS.md) for the controls and evidence required before a production launch. For GitHub Actions runner and CI verification problems, see [CI Troubleshooting](docs/CI_TROUBLESHOOTING.md).
 - Never commit `.env`, Kaggle credentials, cloud credentials, or customer datasets.
 
 ## Quick Start
