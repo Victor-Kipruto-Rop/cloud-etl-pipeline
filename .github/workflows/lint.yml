@@ -1,6 +1,7 @@
 name: Disabled lint workflow
 
-on: []
+on:
+  workflow_dispatch:
 
 jobs:
   disabled:
