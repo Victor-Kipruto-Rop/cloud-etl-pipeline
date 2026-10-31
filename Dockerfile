@@ -16,5 +16,7 @@ RUN groupadd --system etl && useradd --system --gid etl --home-dir /app etl
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --chown=etl:etl . /app
 
+RUN mkdir -p /app/logs /app/data/raw /app/data/processed /app/data/analytics && chown -R etl:etl /app
+
 USER etl
 CMD ["python", "-m", "src.pipeline"]
