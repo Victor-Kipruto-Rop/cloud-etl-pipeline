@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from src.cloud.aws_redshift import load_dataframe_to_redshift
 from src.cloud.aws_s3 import upload_dataframe_as_parquet, upload_directory, upload_file
 from src.extract.extract_data import ExtractionError, extract_csv
+from src.io_utils import write_dataframe_atomic
 from src.extract.kaggle_data import download_kaggle_dataset
 from src.transform.transform_data import TransformError, transform
 from src.validation import ValidationError, parse_required_columns, validate_df
@@ -81,7 +82,9 @@ def run_aws_etl() -> bool:
             )
 
             output_path = processed_dir / f"{csv_file.stem}.parquet"
-            df_transformed.to_parquet(output_path, index=False, compression="snappy")
+            write_dataframe_atomic(
+                df_transformed, output_path, compression="snappy"
+            )
             logger.info(f"Wrote processed Parquet to {output_path}")
 
             upload_file(
