@@ -3,7 +3,8 @@
 
 name: Disabled Python application workflow
 
-on: []
+on:
+  workflow_dispatch:
 
 jobs:
   disabled:
