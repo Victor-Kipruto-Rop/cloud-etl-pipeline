@@ -49,4 +49,24 @@ def test_database_sink_failure_does_not_advance_checkpoint(tmp_path):
             target_table="missing_table", conflict_columns=("id",), file_format="csv",
         )
     assert metadata.get_checkpoint("target", "file://target.csv") is None
-    assert len(metadata.list_quarantine(dataset="target")) == 1
+    assert metadata.list_quarantine(dataset="target") == []
+
+
+def test_data_quality_failure_is_quarantined(tmp_path):
+    from src.validation import ValidationError
+
+    metadata = MetadataStore(create_engine(f"sqlite:///{tmp_path / 'metadata.db'}"))
+    frame = pd.DataFrame({"id": [1]})
+
+    def reject(_):
+        raise ValidationError("missing required customer key")
+
+    with pytest.raises(ValidationError):
+        execute_dataset(
+            frame, frame, dataset="customers", source_uri="file://customers.csv",
+            source_checksum="sum", metadata_store=metadata,
+            layer_root=tmp_path / "lake", file_format="csv", validate=reject,
+        )
+
+    assert metadata.get_checkpoint("customers", "file://customers.csv") is None
+    assert len(metadata.list_quarantine(dataset="customers")) == 1
