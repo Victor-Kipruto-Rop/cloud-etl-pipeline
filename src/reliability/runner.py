@@ -78,8 +78,8 @@ def execute_dataset(
 ) -> dict:
     """Run one dataset and commit its checkpoint only after every required sink.
 
-    A matching successful checksum is skipped. Failures are persisted in the run
-    ledger and quarantine; callers can restore/replay the source explicitly.
+    A matching successful checksum is skipped. All failures enter the run ledger;
+    data-quality failures also enter quarantine for controlled replay.
     """
     if not source_checksum:
         raise ValueError("source_checksum is required for incremental execution")
