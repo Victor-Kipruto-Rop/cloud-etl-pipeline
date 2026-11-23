@@ -86,7 +86,7 @@ jobs:
 
       - name: Comment PR with Plan
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PLAN: ${{ steps.plan.outputs.stdout }}
         with:
